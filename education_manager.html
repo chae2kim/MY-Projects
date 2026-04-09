@@ -607,7 +607,8 @@ function renderCalendar() {
   for(let i=1;i<=last;i++) cells.push({date:new Date(calYear,calMonth,i),other:false});
   while(cells.length%7!==0) cells.push({date:new Date(calYear,calMonth+1,cells.length-first-last+1),other:true});
   document.getElementById('cal-body').innerHTML=cells.map(({date,other})=>{
-    const ds=date.toISOString().slice(0,10), isToday=date.getTime()===today.getTime();
+    const y=date.getFullYear(), m=String(date.getMonth()+1).padStart(2,'0'), d=String(date.getDate()).padStart(2,'0');
+    const ds=`${y}-${m}-${d}`, isToday=date.getTime()===today.getTime();
     const edus=state.교육이력.filter(r=>inRange(ds,r));
     const exps=state.보수교육대상.filter(r=>String(r.만료일||'').slice(0,10)===ds);
     return `<div class="cal-cell${isToday?' today':''}${other?' other-month':''}">
