@@ -306,7 +306,7 @@
             <div class="card-title">보수교육 대상자 현황</div>
             <button class="topbar-btn btn-primary" onclick="openAddProtectionModal()">+ 대상자 추가</button>
           </div>
-          <div id="protection-list"></div>
+          <div id="protection-list" style="max-height:400px;overflow-y:auto"></div>
         </div>
       </div>
 
@@ -362,7 +362,7 @@
               <div class="card-title">직원 관리</div>
               <button class="topbar-btn btn-primary" onclick="openAddEmpModal()">+ 직원 추가</button>
             </div>
-            <div id="emp-list"></div>
+            <div id="emp-list" style="max-height:320px;overflow-y:auto"></div>
           </div>
         </div>
       </div>
@@ -570,7 +570,7 @@ function getAvColor(name) {
 
 function avEl(name) {
   const c = getAvColor(name);
-  return `<div class="av" style="background:${c.bg};color:${c.c}">${name.slice(0,2)}</div>`;
+  return `<div class="av" style="background:${c.bg};color:${c.c}">${name.length>=3?name.slice(1,3):name}</div>`;
 }
 
 function formatCost(n) {
@@ -808,13 +808,14 @@ function renderProtectionList() {
 function renderEmpList() {
   const el = document.getElementById('emp-list');
   if(state.직원목록.length===0) { el.innerHTML = '<div class="empty">등록된 직원이 없습니다</div>'; return; }
+  const sorted = [...state.직원목록].sort((a,b)=>(a.이름||'').localeCompare(b.이름||'','ko'));
   el.innerHTML = `<table>
     <thead><tr><th>이름</th><th>부서</th><th></th></tr></thead>
-    <tbody>${state.직원목록.map((e,i)=>`
+    <tbody>${sorted.map((e,i)=>`
       <tr>
         <td><div class="person">${avEl(e.이름||'?')}<span>${e.이름||''}</span></div></td>
         <td style="color:#94A3B8">${e.부서||''}</td>
-        <td><button class="act-btn del" onclick="deleteEmployee(${i+2})">삭제</button></td>
+        <td><button class="act-btn del" onclick="deleteEmployee(${state.직원목록.indexOf(e)+2})">삭제</button></td>
       </tr>`).join('')}
     </tbody>
   </table>`;
@@ -823,7 +824,8 @@ function renderEmpList() {
 function renderEmpSelect() {
   const sel = document.getElementById('input-emp');
   const protSel = document.getElementById('prot-emp');
-  const opts = state.직원목록.map(e=>`<option value="${e.이름}">${e.이름} (${e.부서||''})</option>`).join('');
+  const sorted = [...state.직원목록].sort((a,b)=>(a.이름||'').localeCompare(b.이름||'','ko'));
+  const opts = sorted.map(e=>`<option value="${e.이름}">${e.이름} (${e.부서||''})</option>`).join('');
   sel.innerHTML = '<option value="">직원 선택...</option>' + opts;
   protSel.innerHTML = '<option value="">선택...</option>' + opts;
 }
