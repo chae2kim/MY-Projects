@@ -511,6 +511,16 @@ function avEl(name) {
 }
 function fmtCost(n) { return parseInt(n||0).toLocaleString(); }
 function fmtDate(s) { return s ? String(s).replace(/-/g,'.').slice(0,10) : ''; }
+function fmtDateRange(r) {
+  if(!r.날짜) return '';
+  const start = fmtDate(r.날짜);
+  const end = r.종료일 && r.종료일 !== r.날짜 ? fmtDate(r.종료일) : '';
+  if(!end) return start;
+  // 같은 년월이면 끝날짜 일(day)만 표시
+  const s = String(r.날짜).slice(0,10), e = String(r.종료일).slice(0,10);
+  if(s.slice(0,7) === e.slice(0,7)) return `${start} ~ ${e.slice(8).replace(/^0/,'')}일`;
+  return `${start} ~ ${end}`;
+}
 function calcExpire(dateStr, years) {
   if(!dateStr||!years) return '';
   const d = new Date(dateStr); d.setFullYear(d.getFullYear()+parseInt(years));
@@ -561,7 +571,7 @@ function renderDashboard() {
       ${recent.map(r=>`<tr>
         <td><div class="person">${avEl(r.이름)}<span>${r.이름||''}</span></div></td>
         <td style="color:#94A3B8">${r.부서||''}</td><td>${r.교육명||''}</td>
-        <td style="color:#94A3B8">${fmtDate(r.날짜)}</td><td>${fmtCost(r.금액)}</td>
+        <td style="color:#94A3B8">${fmtDateRange(r)}</td><td>${fmtCost(r.금액)}</td>
       </tr>`).join('')}</tbody></table>`;
 
   const sorted = [...state.보수교육대상].sort((a,b)=>daysLeft(a.만료일)-daysLeft(b.만료일));
