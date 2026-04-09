@@ -564,15 +564,15 @@ function renderDashboard() {
     ${urgent.map(r=>`<div class="alert-row">${dChip(daysLeft(r.만료일))} ${r.이름} · ${r.교육명} · ${fmtDate(r.만료일)} 만료</div>`).join('')}
     </div></div>` : '';
 
-  const recent = [...state.교육이력].sort((a,b)=>new Date(b.날짜)-new Date(a.날짜)).slice(0,5);
+  const recent = [...state.교육이력].sort((a,b)=>new Date(a.날짜)-new Date(b.날짜));
   document.getElementById('dash-recent').innerHTML = recent.length===0
     ? '<div class="empty">교육 이력이 없습니다</div>'
-    : `<table><thead><tr><th>이름</th><th>부서</th><th>교육명</th><th>날짜</th><th>금액</th></tr></thead><tbody>
+    : `<div style="max-height:280px;overflow-y:auto"><table><thead><tr><th>이름</th><th>부서</th><th>교육명</th><th>날짜</th><th>금액</th></tr></thead><tbody>
       ${recent.map(r=>`<tr>
         <td><div class="person">${avEl(r.이름)}<span>${r.이름||''}</span></div></td>
         <td style="color:#94A3B8">${r.부서||''}</td><td>${r.교육명||''}</td>
         <td style="color:#94A3B8">${fmtDateRange(r)}</td><td>${fmtCost(r.금액)}</td>
-      </tr>`).join('')}</tbody></table>`;
+      </tr>`).join('')}</tbody></table></div>`;
 
   const sorted = [...state.보수교육대상].sort((a,b)=>daysLeft(a.만료일)-daysLeft(b.만료일));
   document.getElementById('dash-protection').innerHTML = sorted.length===0
@@ -626,7 +626,7 @@ function searchEmployee(q) {
   const found=state.직원목록.filter(e=>e.이름&&e.이름.includes(q.trim()));
   if(found.length===0){el.innerHTML='<div class="empty">검색 결과가 없습니다</div>';return;}
   el.innerHTML=found.map(emp=>{
-    const history=state.교육이력.filter(r=>r.이름===emp.이름).sort((a,b)=>new Date(b.날짜)-new Date(a.날짜));
+    const history=state.교육이력.filter(r=>r.이름===emp.이름).sort((a,b)=>new Date(a.날짜)-new Date(b.날짜));
     const prot=state.보수교육대상.filter(r=>r.이름===emp.이름);
     const c=getAvColor(emp.이름);
     const label=emp.이름.length>=3?emp.이름.slice(1,3):emp.이름;
@@ -850,7 +850,7 @@ function loadPerformance() {
     if(dept&&r.부서!==dept) return false;
     if(emp&&r.이름!==emp) return false;
     return true;
-  }).sort((a,b)=>new Date(b.날짜)-new Date(a.날짜));
+  }).sort((a,b)=>new Date(a.날짜)-new Date(b.날짜));
 
   const totalCost=perfData.reduce((s,r)=>s+Number(r.금액||0),0);
   const people=new Set(perfData.map(r=>r.이름)).size;
