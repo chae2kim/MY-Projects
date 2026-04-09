@@ -327,8 +327,12 @@
                 <input class="form-input" id="input-name" placeholder="예: ISO 9001 구축 및 운영실무">
               </div>
               <div class="form-group">
-                <label class="form-label">교육 날짜</label>
+                <label class="form-label">교육 시작일</label>
                 <input class="form-input" id="input-date" type="date">
+              </div>
+              <div class="form-group">
+                <label class="form-label">교육 종료일 <span style="font-size:11px;color:#94A3B8">(하루면 비워두세요)</span></label>
+                <input class="form-input" id="input-date-end" type="date">
               </div>
               <div class="form-group">
                 <label class="form-label">장소</label>
@@ -729,7 +733,11 @@ function renderCalendar() {
   document.getElementById('cal-body').innerHTML = cells.map(({date,other})=>{
     const ds = date.toISOString().slice(0,10);
     const isToday = date.getTime()===today.getTime();
-    const edus = state.교육이력.filter(r=>String(r.날짜).slice(0,10)===ds);
+    const edus = state.교육이력.filter(r=>{
+      const start = String(r.날짜).slice(0,10);
+      const end = String(r.종료일||r.날짜).slice(0,10);
+      return ds >= start && ds <= end;
+    });
     const exps = state.보수교육대상.filter(r=>String(r.만료일).slice(0,10)===ds);
     return `<div class="cal-cell${isToday?' today':''}${other?' other-month':''}">
       <div class="cal-date">${date.getDate()}</div>
@@ -835,24 +843,27 @@ async function saveEducation() {
   const empName = document.getElementById('input-emp').value;
   const name = document.getElementById('input-name').value.trim();
   const date = document.getElementById('input-date').value;
+  const dateEnd = document.getElementById('input-date-end').value || date;
   const place = document.getElementById('input-place').value.trim();
   const cost = document.getElementById('input-cost').value;
   const validity = document.getElementById('input-validity').value;
   const note = document.getElementById('input-note').value.trim();
 
-  if(!empName||!name||!date) { showToast('직원, 교육명, 날짜는 필수입니다'); return; }
+  if(!empName||!name||!date) { showToast('직원, 교육명, 시작일은 필수입니다'); return; }
+  if(dateEnd < date) { showToast('종료일이 시작일보다 앞입니다'); return; }
 
   const emp = state.직원목록.find(e=>e.이름===empName);
   const expireDate = validity ? calcExpireDate(date, validity) : '';
   const id = Date.now();
 
-  const row = [id, empName, emp?.부서||'', name, date, place, cost||0, validity||'', expireDate, note];
+  const row = [id, empName, emp?.부서||'', name, date, dateEnd, place, cost||0, validity||'', expireDate, note];
   try {
     await apiCall({action:'add', sheet:'교육이력', data:JSON.stringify(row)});
-    state.교육이력.push({ID:id, 이름:empName, 부서:emp?.부서||'', 교육명:name, 날짜:date, 장소:place, 금액:cost||0, 유효기간:validity||'', 만료일:expireDate, 비고:note});
+    state.교육이력.push({ID:id, 이름:empName, 부서:emp?.부서||'', 교육명:name, 날짜:date, 종료일:dateEnd, 장소:place, 금액:cost||0, 유효기간:validity||'', 만료일:expireDate, 비고:note});
     refreshAll();
     document.getElementById('input-name').value='';
     document.getElementById('input-date').value='';
+    document.getElementById('input-date-end').value='';
     document.getElementById('input-place').value='';
     document.getElementById('input-cost').value='';
     document.getElementById('input-validity').value='';
