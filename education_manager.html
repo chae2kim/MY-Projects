@@ -439,7 +439,7 @@
       </div>
       <div class="form-group">
         <label class="form-label">부서</label>
-        <input class="form-input" id="emp-dept" placeholder="요양팀">
+        <input class="form-input" id="emp-dept" placeholder="예: 품질관리 (부/팀 제외)">
       </div>
     </div>
     <div class="modal-footer">
@@ -479,6 +479,106 @@
     <div class="modal-footer">
       <button class="topbar-btn btn-secondary" onclick="closeModal('modal-protection')">취소</button>
       <button class="topbar-btn btn-primary" onclick="saveProtection()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 모달: 교육 수정 -->
+<div class="modal-overlay" id="modal-edit-edu">
+  <div class="modal">
+    <div class="modal-title">교육 이력 수정</div>
+    <input type="hidden" id="edit-edu-idx">
+    <div class="form-grid">
+      <div class="form-group full">
+        <label class="form-label">교육명</label>
+        <input class="form-input" id="edit-edu-name" placeholder="ISO 9001 구축 및 운영실무">
+      </div>
+      <div class="form-group">
+        <label class="form-label">교육 시작일</label>
+        <input class="form-input" id="edit-edu-date" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">교육 종료일 <span style="font-size:11px;color:#94A3B8">(하루면 비워두세요)</span></label>
+        <input class="form-input" id="edit-edu-date-end" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">장소</label>
+        <input class="form-input" id="edit-edu-place" placeholder="한국표준협회">
+      </div>
+      <div class="form-group">
+        <label class="form-label">금액 (원)</label>
+        <input class="form-input" id="edit-edu-cost" type="number">
+      </div>
+      <div class="form-group">
+        <label class="form-label">유효기간</label>
+        <select class="form-select" id="edit-edu-validity">
+          <option value="">없음</option>
+          <option value="1">1년</option>
+          <option value="2">2년</option>
+          <option value="3">3년</option>
+          <option value="5">5년</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label class="form-label">비고</label>
+        <input class="form-input" id="edit-edu-note" placeholder="메모 (선택)">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="topbar-btn btn-secondary" onclick="closeModal('modal-edit-edu')">취소</button>
+      <button class="topbar-btn btn-primary" onclick="updateEducation()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 모달: 교육 이력 수정 -->
+<div class="modal-overlay" id="modal-edit-edu">
+  <div class="modal">
+    <div class="modal-title">교육 이력 수정</div>
+    <input type="hidden" id="edit-edu-idx">
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">직원</label>
+        <input class="form-input" id="edit-edu-emp" disabled style="background:#F8FAFC;color:#94A3B8">
+      </div>
+      <div class="form-group">
+        <label class="form-label">교육명</label>
+        <input class="form-input" id="edit-edu-name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">교육 시작일</label>
+        <input class="form-input" id="edit-edu-date" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">교육 종료일 <span style="font-size:11px;color:#94A3B8">(하루면 비워두세요)</span></label>
+        <input class="form-input" id="edit-edu-date-end" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">장소</label>
+        <input class="form-input" id="edit-edu-place">
+      </div>
+      <div class="form-group">
+        <label class="form-label">금액 (원)</label>
+        <input class="form-input" id="edit-edu-cost" type="number">
+      </div>
+      <div class="form-group">
+        <label class="form-label">유효기간</label>
+        <select class="form-select" id="edit-edu-validity">
+          <option value="">없음</option>
+          <option value="1">1년</option>
+          <option value="2">2년</option>
+          <option value="3">3년</option>
+          <option value="5">5년</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">비고</label>
+        <input class="form-input" id="edit-edu-note">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="topbar-btn btn-secondary" onclick="closeModal('modal-edit-edu')">취소</button>
+      <button class="topbar-btn btn-primary" onclick="updateEducation()">저장</button>
     </div>
   </div>
 </div>
@@ -769,14 +869,16 @@ function searchEmployee(q) {
       </div>
       ${history.length>0?`
       <table>
-        <thead><tr><th>교육명</th><th>날짜</th><th>장소</th><th>금액</th><th>만료일</th></tr></thead>
+        <thead><tr><th>교육명</th><th>날짜</th><th>종료일</th><th>장소</th><th>금액</th><th>만료일</th><th></th></tr></thead>
         <tbody>${history.map(r=>`
           <tr>
             <td>${r.교육명||''}</td>
             <td style="color:#94A3B8">${fmtDate(r.날짜)}</td>
+            <td style="color:#94A3B8">${r.종료일&&r.종료일!==r.날짜?fmtDate(r.종료일):'-'}</td>
             <td style="color:#94A3B8">${r.장소||''}</td>
             <td>${formatCost(r.금액)}</td>
             <td>${r.만료일?fmtDate(r.만료일):'<span style="color:#94A3B8">-</span>'}</td>
+            <td><button class="act-btn" onclick="openEditEduModal('${r.ID}')">수정</button></td>
           </tr>`).join('')}
         </tbody>
       </table>`:'<div class="empty">교육 이력이 없습니다</div>'}
@@ -908,6 +1010,58 @@ async function saveProtection() {
   } catch(e) { showToast('저장 실패'); }
 }
 
+// ─── 교육 수정/삭제 ──────────────────────────────────────
+function openEditEduModal(id) {
+  const r = state.교육이력.find(r=>String(r.ID)===String(id));
+  if(!r) { showToast('데이터를 찾을 수 없습니다'); return; }
+  document.getElementById('edit-edu-idx').value = id;
+  document.getElementById('edit-edu-emp').value = r.이름||'';
+  document.getElementById('edit-edu-name').value = r.교육명||'';
+  document.getElementById('edit-edu-date').value = r.날짜||'';
+  document.getElementById('edit-edu-date-end').value = r.종료일&&r.종료일!==r.날짜?r.종료일:'';
+  document.getElementById('edit-edu-place').value = r.장소||'';
+  document.getElementById('edit-edu-cost').value = r.금액||'';
+  document.getElementById('edit-edu-validity').value = r.유효기간||'';
+  document.getElementById('edit-edu-note').value = r.비고||'';
+  document.getElementById('modal-edit-edu').classList.add('show');
+}
+
+async function updateEducation() {
+  const id = document.getElementById('edit-edu-idx').value;
+  const r = state.교육이력.find(r=>String(r.ID)===String(id));
+  if(!r) return;
+  const name = document.getElementById('edit-edu-name').value.trim();
+  const date = document.getElementById('edit-edu-date').value;
+  const dateEnd = document.getElementById('edit-edu-date-end').value || date;
+  const place = document.getElementById('edit-edu-place').value.trim();
+  const cost = document.getElementById('edit-edu-cost').value;
+  const validity = document.getElementById('edit-edu-validity').value;
+  const note = document.getElementById('edit-edu-note').value.trim();
+  if(!name||!date) { showToast('교육명과 시작일은 필수입니다'); return; }
+  const expireDate = validity ? calcExpireDate(date, validity) : '';
+  const rowNum = state.교육이력.indexOf(r) + 2;
+  const row = [r.ID, r.이름, r.부서, name, date, dateEnd, place, cost||0, validity||'', expireDate, note];
+  try {
+    await apiCall({action:'update', sheet:'교육이력', row:rowNum, data:JSON.stringify(row)});
+    r.교육명=name; r.날짜=date; r.종료일=dateEnd; r.장소=place; r.금액=cost||0; r.유효기간=validity||''; r.만료일=expireDate; r.비고=note;
+    refreshAll();
+    closeModal('modal-edit-edu');
+    showToast('수정되었습니다');
+  } catch(e) { showToast('수정 실패. 다시 시도해주세요'); }
+}
+
+async function deleteEducation(id) {
+  if(!confirm('교육 이력을 삭제하시겠습니까?')) return;
+  const r = state.교육이력.find(r=>String(r.ID)===String(id));
+  if(!r) return;
+  const rowNum = state.교육이력.indexOf(r) + 2;
+  try {
+    await apiCall({action:'delete', sheet:'교육이력', row:rowNum});
+    await loadAll();
+    showToast('삭제되었습니다');
+  } catch(e) { showToast('삭제 실패'); }
+}
+
 // ─── 삭제 ────────────────────────────────────────────────
 async function deleteEmployee(row) {
   if(!confirm('직원을 삭제하시겠습니까?')) return;
@@ -1018,22 +1172,27 @@ function loadPerformance() {
   }
   const totalCostAll = perfData.reduce((s,r)=>s+Number(r.금액||0),0);
   document.getElementById('perf-table').innerHTML = `<table>
-    <thead><tr><th>이름</th><th>부서</th><th>교육명</th><th>날짜</th><th>장소</th><th>금액</th><th>유효기간</th><th>만료일</th></tr></thead>
+    <thead><tr><th>이름</th><th>부서</th><th>교육명</th><th>시작일</th><th>종료일</th><th>장소</th><th>금액</th><th>유효기간</th><th>만료일</th><th></th></tr></thead>
     <tbody>
       ${perfData.map(r=>`<tr>
         <td><div class="person">${avEl(r.이름||'?')}<span>${r.이름||''}</span></div></td>
         <td style="color:#94A3B8">${r.부서||''}</td>
         <td>${r.교육명||''}</td>
         <td style="color:#94A3B8">${fmtDate(r.날짜)}</td>
+        <td style="color:#94A3B8">${r.종료일&&r.종료일!==r.날짜?fmtDate(r.종료일):'-'}</td>
         <td style="color:#94A3B8">${r.장소||''}</td>
         <td>${formatCost(r.금액)}</td>
         <td style="color:#94A3B8">${r.유효기간?r.유효기간+'년':'-'}</td>
         <td style="color:#94A3B8">${r.만료일?fmtDate(r.만료일):'-'}</td>
+        <td><div class="row-actions">
+          <button class="act-btn" onclick="openEditEduModal('${r.ID}')">수정</button>
+          <button class="act-btn del" onclick="deleteEducation('${r.ID}')">삭제</button>
+        </div></td>
       </tr>`).join('')}
       <tr class="total-row">
-        <td colspan="5" style="text-align:right;padding-right:12px">합계</td>
+        <td colspan="6" style="text-align:right;padding-right:12px">합계</td>
         <td>${totalCostAll.toLocaleString()}</td>
-        <td colspan="2"></td>
+        <td colspan="3"></td>
       </tr>
     </tbody>
   </table>`;
