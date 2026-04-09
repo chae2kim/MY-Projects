@@ -1045,6 +1045,7 @@ async function updateEducation() {
     await apiCall({action:'update', sheet:'교육이력', row:rowNum, data:JSON.stringify(row)});
     r.교육명=name; r.날짜=date; r.종료일=dateEnd; r.장소=place; r.금액=cost||0; r.유효기간=validity||''; r.만료일=expireDate; r.비고=note;
     refreshAll();
+    if(document.getElementById('page-performance').classList.contains('active')) loadPerformance();
     closeModal('modal-edit-edu');
     showToast('수정되었습니다');
   } catch(e) { showToast('수정 실패. 다시 시도해주세요'); }
