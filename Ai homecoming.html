@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Homecoming Lab — 참석 신청</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f5f8;
+    --white: #ffffff;
+    --surface: #eceef4;
+    --border: #dde0eb;
+    --border-focus: #1a2f5e;
+    --accent: #1a2f5e;
+    --accent-light: #e8ecf5;
+    --accent2: #e8820c;
+    --text: #111827;
+    --text-muted: #5a6278;
+    --text-dim: #adb3c7;
+    --error: #dc3545;
+    --success: #198754;
+    --header-bg: #1a2f5e;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── Hero header ── */
+  .hero {
+    background: var(--header-bg);
+    background-image:
+      radial-gradient(ellipse at 80% 20%, rgba(255,255,255,0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 10% 80%, rgba(56,201,176,0.15) 0%, transparent 50%);
+    padding: 52px 24px 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .hero-inner {
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 100px;
+    padding: 5px 14px;
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: rgba(255,255,255,0.9);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 22px;
+  }
+
+  .hero-badge::before {
+    content: '';
+    width: 5px; height: 5px;
+    background: #7efde0;
+    border-radius: 50%;
+    box-shadow: 0 0 6px #7efde0;
+    animation: pulse 2s ease infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .hero-title {
+    font-family: 'Noto Serif KR', serif;
+    font-size: clamp(30px, 6vw, 44px);
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+
+  .hero-title em {
+    font-style: normal;
+    color: #a5eddf;
+  }
+
+  .hero-sub {
+    font-size: 13px;
+    color: rgba(255,255,255,0.65);
+    margin-bottom: 28px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.04em;
+  }
+
+  .hero-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .hero-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    padding: 9px 15px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.9);
+    font-weight: 500;
+  }
+
+  /* ── Container ── */
+  .container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 24px;
+    margin-bottom: 16px;
+    opacity: 0;
+    transform: translateY(16px);
+    animation: fadeUp 0.5s ease forwards;
+  }
+
+  .card:nth-child(1) { animation-delay: 0.1s; }
+  .card:nth-child(2) { animation-delay: 0.2s; }
+  .card:nth-child(3) { animation-delay: 0.3s; }
+  .card:nth-child(4) { animation-delay: 0.4s; }
+  .card:nth-child(5) { animation-delay: 0.5s; }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title .dot {
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+  }
+
+  /* ── Input ── */
+  .input-group { margin-bottom: 14px; }
+  .input-group:last-child { margin-bottom: 0; }
+
+  .input-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 7px;
+  }
+
+  .required { color: var(--accent); margin-left: 2px; }
+
+  .text-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 15px;
+    font-size: 15px;
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+    outline: none;
+  }
+
+  .text-input::placeholder { color: var(--text-dim); }
+
+  .text-input:focus {
+    border-color: var(--border-focus);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(91,106,240,0.1);
+  }
+
+  /* ── Chips ── */
+  .chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+  }
+
+  .chip-input { display: none; }
+
+  .chip-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 9px 18px;
+    border-radius: 100px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+  }
+
+  .chip-label:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-light);
+  }
+
+  .chip-input:checked + .chip-label {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(91,106,240,0.25);
+  }
+
+  /* ── 기타 입력 ── */
+  #other-input-wrap {
+    display: none;
+    margin-top: 12px;
+    animation: fadeUp 0.25s ease forwards;
+  }
+
+  #other-input-wrap.show { display: block; }
+
+  /* ── Textarea ── */
+  .textarea-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 15px;
+    font-size: 14px;
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    resize: vertical;
+    min-height: 96px;
+    transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+    outline: none;
+    line-height: 1.7;
+  }
+
+  .textarea-input::placeholder { color: var(--text-dim); }
+
+  .textarea-input:focus {
+    border-color: var(--border-focus);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(91,106,240,0.1);
+  }
+
+  /* ── Coming soon ── */
+  .coming-soon {
+    background: var(--surface);
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 22px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .coming-soon .cs-icon { font-size: 20px; margin-bottom: 7px; }
+
+  /* ── Error ── */
+  .error-msg {
+    display: none;
+    color: var(--error);
+    font-size: 12px;
+    margin-top: 5px;
+    padding-left: 2px;
+  }
+
+  .error-msg.show { display: block; }
+
+  /* ── Submit ── */
+  .submit-btn {
+    width: 100%;
+    background: var(--accent);
+    border: none;
+    border-radius: 12px;
+    padding: 17px;
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+    letter-spacing: 0.03em;
+    transition: all 0.2s ease;
+    margin-top: 4px;
+    box-shadow: 0 4px 14px rgba(91,106,240,0.3);
+  }
+
+  .submit-btn:hover {
+    background: #4a59df;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(91,106,240,0.35);
+  }
+
+  .submit-btn:active { transform: translateY(0); }
+  .submit-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* ── Success ── */
+  #success-screen {
+    display: none;
+    text-align: center;
+    padding: 60px 24px;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+
+  #success-screen.visible { display: block; opacity: 1; }
+
+  .success-circle {
+    width: 80px; height: 80px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    margin: 0 auto 24px;
+    box-shadow: 0 8px 24px rgba(91,106,240,0.3);
+  }
+
+  .success-title {
+    font-family: 'Noto Serif KR', serif;
+    font-size: 26px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+
+  .success-desc {
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.9;
+  }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(16px);
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 11px 22px;
+    font-size: 13px;
+    color: var(--error);
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 999;
+    white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  }
+
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    margin-top: 32px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-badge">Kyung Hee Univ · AI Business</div>
+    <h1 class="hero-title">AI Homecoming <em>Lab</em></h1>
+    <p class="hero-sub">경희대학교 경영대학원 AI비즈니스 · 참석 신청</p>
+    <div class="hero-chips">
+      <div class="hero-chip">📅 2026년 5월 16일 토요일</div>
+      <div class="hero-chip">📍 경희대학교 오비스홀</div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Form view -->
+  <div id="form-view">
+    <form id="rsvp-form" novalidate>
+
+      <!-- 기본 정보 -->
+      <div class="card">
+        <div class="card-title"><span class="dot"></span>기본 정보</div>
+        <div class="input-group">
+          <label class="input-label" for="name">이름<span class="required">*</span></label>
+          <input class="text-input" type="text" id="name" placeholder="홍길동" autocomplete="name">
+          <span class="error-msg" id="name-error">이름을 입력해주세요.</span>
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="phone">연락처<span class="required">*</span></label>
+          <input class="text-input" type="tel" id="phone" placeholder="010-0000-0000" autocomplete="tel">
+          <span class="error-msg" id="phone-error">연락처를 입력해주세요.</span>
+        </div>
+      </div>
+
+      <!-- 참석 경로 -->
+      <div class="card">
+        <div class="card-title"><span class="dot"></span>참석 경로<span class="required">*</span></div>
+        <div class="chip-group" id="route-group">
+          <input class="chip-input" type="radio" name="route" id="r1" value="재학생">
+          <label class="chip-label" for="r1">재학생</label>
+
+          <input class="chip-input" type="radio" name="route" id="r2" value="졸업생">
+          <label class="chip-label" for="r2">졸업생</label>
+
+          <input class="chip-input" type="radio" name="route" id="r3" value="가족">
+          <label class="chip-label" for="r3">가족</label>
+
+          <input class="chip-input" type="radio" name="route" id="r4" value="지인">
+          <label class="chip-label" for="r4">지인</label>
+
+          <input class="chip-input" type="radio" name="route" id="r5" value="기타">
+          <label class="chip-label" for="r5">기타</label>
+        </div>
+
+        <!-- 기타 입력칸 -->
+        <div id="other-input-wrap">
+          <input class="text-input" type="text" id="other-text" placeholder="참석 경로를 직접 입력해주세요">
+        </div>
+
+        <span class="error-msg" id="route-error">참석 경로를 선택해주세요.</span>
+      </div>
+
+      <!-- 사전 질문 -->
+      <div class="card">
+        <div class="card-title"><span class="dot"></span>사전 질문</div>
+        <div class="coming-soon">
+          <div class="cs-icon">🔧</div>
+          질문 항목 준비 중입니다
+        </div>
+      </div>
+
+      <!-- 기타 전달 사항 -->
+      <div class="card">
+        <div class="card-title"><span class="dot"></span>기타 전달 사항</div>
+        <textarea class="textarea-input" id="message" placeholder="궁금한 점이나 전달하고 싶은 내용을 자유롭게 작성해주세요."></textarea>
+      </div>
+
+      <button type="submit" class="submit-btn" id="submit-btn">참석 신청하기 →</button>
+
+    </form>
+
+    <div class="footer" style="margin-top:32px;">© 2026 경희대학교 경영대학원 AI비즈니스</div>
+  </div>
+
+  <!-- Success view -->
+  <div id="success-screen">
+    <div class="success-circle">🎉</div>
+    <h2 class="success-title">신청이 완료되었습니다!</h2>
+    <p class="success-desc">
+      AI Homecoming Lab에 참석 신청해주셔서 감사합니다.<br>
+      2026년 5월 16일 토요일,<br>
+      경희대학교 오비스홀에서 뵙겠습니다!
+    </p>
+  </div>
+
+</div><!-- /container -->
+
+<div id="toast"></div>
+
+<script>
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyQBpx8wCRo_NhAArOAuV3mMbKGtN4svXF1NrpQnusoBI7CVD0AlDwwJYqD4jkawvoN/exec';
+
+  // ── 기타 선택 시 입력칸 토글 ──
+  document.querySelectorAll('input[name="route"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+      const wrap = document.getElementById('other-input-wrap');
+      if (this.value === '기타') {
+        wrap.classList.add('show');
+        document.getElementById('other-text').focus();
+      } else {
+        wrap.classList.remove('show');
+        document.getElementById('other-text').value = '';
+      }
+    });
+  });
+
+  // ── 전화번호 자동 포맷 ──
+  document.getElementById('phone').addEventListener('input', function() {
+    const num = this.value.replace(/\D/g, '');
+    if (num.length <= 3) this.value = num;
+    else if (num.length <= 7) this.value = num.slice(0,3) + '-' + num.slice(3);
+    else this.value = num.slice(0,3) + '-' + num.slice(3,7) + '-' + num.slice(7,11);
+  });
+
+  // ── Error helpers ──
+  function showError(id, msg) {
+    const el = document.getElementById(id);
+    if (msg) { el.textContent = msg; el.classList.add('show'); }
+    else el.classList.remove('show');
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  // ── Validate ──
+  function validate() {
+    let ok = true;
+    const name = document.getElementById('name').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const route = document.querySelector('input[name="route"]:checked');
+
+    showError('name-error', name ? '' : '이름을 입력해주세요.');
+    if (!name) ok = false;
+
+    const clean = phone.replace(/\D/g, '');
+    if (!phone) { showError('phone-error', '연락처를 입력해주세요.'); ok = false; }
+    else if (clean.length < 10) { showError('phone-error', '올바른 연락처를 입력해주세요.'); ok = false; }
+    else showError('phone-error', '');
+
+    showError('route-error', route ? '' : '참석 경로를 선택해주세요.');
+    if (!route) ok = false;
+
+    return ok;
+  }
+
+  // ── Submit ──
+  document.getElementById('rsvp-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    if (!validate()) return;
+
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = '제출 중...';
+
+    const routeVal = document.querySelector('input[name="route"]:checked').value;
+    const otherText = document.getElementById('other-text').value.trim();
+
+    const data = {
+      timestamp: new Date().toLocaleString('ko-KR'),
+      name: document.getElementById('name').value.trim(),
+      phone: document.getElementById('phone').value.trim(),
+      route: routeVal === '기타' && otherText ? `기타(${otherText})` : routeVal,
+      message: document.getElementById('message').value.trim()
+    };
+
+    try {
+      if (APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
+        console.log('제출 데이터:', data);
+        showSuccessScreen();
+        return;
+      }
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      showSuccessScreen();
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = '참석 신청하기 →';
+      showToast('⚠️ 제출 중 오류가 발생했습니다. 다시 시도해주세요.');
+    }
+  });
+
+  function showSuccessScreen() {
+    document.getElementById('form-view').style.display = 'none';
+    const s = document.getElementById('success-screen');
+    s.style.display = 'block';
+    setTimeout(() => s.classList.add('visible'), 50);
+  }
+</script>
+</body>
+</html>
