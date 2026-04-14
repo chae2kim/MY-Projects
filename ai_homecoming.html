@@ -592,16 +592,17 @@
     };
 
     try {
-      if (APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
-        console.log('제출 데이터:', data);
-        showSuccessScreen();
-        return;
-      }
+      const formData = new FormData();
+      formData.append('timestamp', data.timestamp);
+      formData.append('name', data.name);
+      formData.append('phone', data.phone);
+      formData.append('route', data.route);
+      formData.append('message', data.message);
+
       await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: formData
       });
       showSuccessScreen();
     } catch (err) {
