@@ -433,7 +433,21 @@ document.getElementById('rsvp-form').addEventListener('submit',async function(e)
   fd.append('q2',document.getElementById('q2').value.trim());
   fd.append('message',document.getElementById('message').value.trim());
   try{
-    await fetch(APPS_SCRIPT_URL,{method:'POST',mode:'no-cors',body:fd});
+    await fetch(APPS_SCRIPT_URL,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        timestamp:new Date().toLocaleString('ko-KR'),
+        name:document.getElementById('name').value.trim(),
+        phone:document.getElementById('phone').value.trim(),
+        route:routeVal==='기타'&&otherText?`기타(${otherText})`:routeVal,
+        companions:companions,
+        q1:document.getElementById('q1').value.trim(),
+        q2:document.getElementById('q2').value.trim(),
+        message:document.getElementById('message').value.trim()
+      })
+    });
     document.getElementById('rsvp-form-wrap').style.display='none';
     const s=document.getElementById('success-screen');
     s.style.display='block';
@@ -459,29 +473,33 @@ async function uploadPhotos(input, album) {
   for (const file of files) {
     progressText.textContent = `업로드 중... (${done + 1}/${files.length})`;
 
-    // 이미지 리사이징 (최대 1200px, 용량 최적화)
-    const resized = await resizeImage(file, 1200);
-
-    const base64 = resized.split(',')[1];
-    const fd = new FormData();
-    fd.append('type', 'photo');
-    fd.append('album', album);
-    fd.append('filename', file.name);
-    fd.append('mimeType', file.type);
-    fd.append('data', base64);
-
     try {
-      await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: fd });
+      const resized = await resizeImage(file, 1200);
+      const base64 = resized.split(',')[1];
+
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'photo',
+          album: album,
+          filename: file.name,
+          mimeType: file.type,
+          base64: base64
+        })
+      });
 
       // 미리보기 추가
+      if (grid.querySelector('.gallery-cell')) grid.querySelector('.gallery-cell').remove();
       const cell = document.createElement('div');
       cell.style.cssText = 'border-radius:10px;aspect-ratio:1;overflow:hidden;border:1px solid var(--border)';
       const img = document.createElement('img');
       img.src = resized;
       img.style.cssText = 'width:100%;height:100%;object-fit:cover';
       cell.appendChild(img);
-      if (grid.querySelector('.gallery-cell')) grid.querySelector('.gallery-cell').remove();
       grid.appendChild(cell);
+
     } catch(err) {
       showToast('⚠️ ' + file.name + ' 업로드 실패');
     }
