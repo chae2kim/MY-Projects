@@ -179,7 +179,14 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
           </div>
           <div class="card">
             <div class="card-title">사전 질문</div>
-            <div class="coming-soon-block">🔧 질문 항목 준비 중입니다</div>
+            <div class="input-group">
+              <label class="input-label">이번 홈커밍 데이에서 얻어가고 싶은 것은 무엇인가요?</label>
+              <textarea class="text-input" id="q1" placeholder="EX. AI시대의 기업가 정신이란 무엇인가요?" style="resize:vertical;min-height:80px;line-height:1.7"></textarea>
+            </div>
+            <div class="input-group" style="margin-bottom:0">
+              <label class="input-label">행사와 관련해 궁금한 사항이 있으신가요?</label>
+              <textarea class="text-input" id="q2" placeholder="EX. 행사는 몇시에 끝나나요?" style="resize:vertical;min-height:80px;line-height:1.7"></textarea>
+            </div>
           </div>
           <div class="card">
             <div class="card-title">기타 전달 사항</div>
@@ -271,13 +278,19 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
           <button class="gallery-tab" onclick="switchGallery('after',this)">추억 사진</button>
         </div>
         <div id="gallery-before">
-          <div class="upload-zone" onclick="document.getElementById('file-input').click()">
+          <div class="upload-zone" id="upload-zone-before" onclick="document.getElementById('file-input-before').click()">
             <div class="upload-icon">📤</div>
             <div class="upload-text">사진 업로드</div>
-            <div class="upload-sub">구글 드라이브 연동 준비 중</div>
+            <div class="upload-sub">탭하여 사진 선택 (여러 장 가능)</div>
           </div>
-          <input type="file" id="file-input" accept="image/*" multiple style="display:none">
-          <div class="gallery-grid"><div class="gallery-cell">📷</div></div>
+          <input type="file" id="file-input-before" accept="image/*" multiple style="display:none" onchange="uploadPhotos(this,'before')">
+          <div id="upload-progress-before" style="display:none;margin-bottom:12px">
+            <div style="background:var(--surface);border-radius:8px;height:6px;overflow:hidden">
+              <div id="progress-bar-before" style="background:var(--navy);height:100%;width:0%;transition:width 0.3s"></div>
+            </div>
+            <p id="progress-text-before" style="font-size:12px;color:var(--muted);margin-top:6px;text-align:center"></p>
+          </div>
+          <div class="gallery-grid" id="grid-before"><div class="gallery-cell">📷</div></div>
         </div>
         <div id="gallery-after" style="display:none">
           <div class="gallery-grid"><div class="gallery-cell">📷</div></div>
@@ -416,6 +429,8 @@ document.getElementById('rsvp-form').addEventListener('submit',async function(e)
   fd.append('phone',document.getElementById('phone').value.trim());
   fd.append('route',routeVal==='기타'&&otherText?`기타(${otherText})`:routeVal);
   fd.append('companions',JSON.stringify(companions));
+  fd.append('q1',document.getElementById('q1').value.trim());
+  fd.append('q2',document.getElementById('q2').value.trim());
   fd.append('message',document.getElementById('message').value.trim());
   try{
     await fetch(APPS_SCRIPT_URL,{method:'POST',mode:'no-cors',body:fd});
@@ -428,6 +443,79 @@ document.getElementById('rsvp-form').addEventListener('submit',async function(e)
     showToast('⚠️ 제출 중 오류가 발생했습니다. 다시 시도해주세요.');
   }
 });
+// ── 사진 업로드 ──
+async function uploadPhotos(input, album) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+
+  const progressWrap = document.getElementById('upload-progress-' + album);
+  const progressBar = document.getElementById('progress-bar-' + album);
+  const progressText = document.getElementById('progress-text-' + album);
+  const grid = document.getElementById('grid-' + album);
+
+  progressWrap.style.display = 'block';
+  let done = 0;
+
+  for (const file of files) {
+    progressText.textContent = `업로드 중... (${done + 1}/${files.length})`;
+
+    // 이미지 리사이징 (최대 1200px, 용량 최적화)
+    const resized = await resizeImage(file, 1200);
+
+    const base64 = resized.split(',')[1];
+    const fd = new FormData();
+    fd.append('type', 'photo');
+    fd.append('album', album);
+    fd.append('filename', file.name);
+    fd.append('mimeType', file.type);
+    fd.append('data', base64);
+
+    try {
+      await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: fd });
+
+      // 미리보기 추가
+      const cell = document.createElement('div');
+      cell.style.cssText = 'border-radius:10px;aspect-ratio:1;overflow:hidden;border:1px solid var(--border)';
+      const img = document.createElement('img');
+      img.src = resized;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+      cell.appendChild(img);
+      if (grid.querySelector('.gallery-cell')) grid.querySelector('.gallery-cell').remove();
+      grid.appendChild(cell);
+    } catch(err) {
+      showToast('⚠️ ' + file.name + ' 업로드 실패');
+    }
+
+    done++;
+    progressBar.style.width = (done / files.length * 100) + '%';
+  }
+
+  progressText.textContent = `✓ ${done}장 업로드 완료!`;
+  setTimeout(() => { progressWrap.style.display = 'none'; progressBar.style.width = '0%'; }, 2500);
+  input.value = '';
+}
+
+function resizeImage(file, maxSize) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > maxSize || h > maxSize) {
+          if (w > h) { h = h * maxSize / w; w = maxSize; }
+          else { w = w * maxSize / h; h = maxSize; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 </script>
 </body>
 </html>
