@@ -77,12 +77,6 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .badge-green{background:#e6f4ea;color:#1e6b3a}
 .badge-gray{background:var(--surface);color:var(--muted)}
 .coming-soon-block{background:var(--surface);border:1.5px dashed var(--border);border-radius:10px;padding:22px;text-align:center;color:var(--dim);font-size:13px;font-family:'DM Mono',monospace}
-.dir-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-.dir-tab{padding:8px 16px;border-radius:100px;border:1.5px solid var(--border);font-size:13px;cursor:pointer;color:var(--muted);background:var(--surface);font-family:'Noto Sans KR',sans-serif;font-weight:500;transition:all 0.15s}
-.dir-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
-.dir-content{display:none}
-.dir-content.active{display:block}
-.map-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;height:160px;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
 .info-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--surface)}
 .info-item:last-child{border-bottom:none}
 .info-icon{font-size:18px;width:28px;text-align:center;flex-shrink:0;margin-top:1px}
@@ -236,7 +230,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
         <div class="tl-item">
           <div class="tl-time">16:30</div>
           <div class="tl-line"><div class="tl-dot"></div><div class="tl-bar"></div></div>
-          <div class="tl-body"><div class="tl-title">[2부] 동문회 발대식</div><div class="tl-desc">전공 소개 및 동문 회장 임명장 전달</div><span class="tl-badge badge-navy">세레모니</span></div>
+          <div class="tl-body"><div class="tl-title">[2부] 동문회 발대식</div><div class="tl-desc">전공 소개 및 동문 회장 임명장 전달</div><span class="tl-badge badge-navy">발대식</span></div>
         </div>
         <div class="tl-item">
           <div class="tl-time">16:50</div>
@@ -247,39 +241,6 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
           <div class="tl-time">17:00~</div>
           <div class="tl-line"><div class="tl-dot"></div></div>
           <div class="tl-body"><div class="tl-title">식사 및 네트워킹</div><div class="tl-desc">외부 식사 및 자유 교류</div><span class="tl-badge badge-green">네트워킹</span></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 오시는 길 -->
-  <div class="page" id="page-directions">
-    <div style="padding:16px 0 0">
-      <div class="card">
-        <div class="map-box">
-          <div style="text-align:center;color:var(--muted);font-size:13px">
-            <div style="font-size:28px;margin-bottom:8px">🗺️</div>
-            <div>약도 이미지 준비 중</div>
-            <div style="font-size:11px;color:var(--dim);margin-top:4px">경희대학교 오비스홀</div>
-          </div>
-        </div>
-        <div class="dir-tabs">
-          <button class="dir-tab active" onclick="switchDir('subway',this)">지하철</button>
-          <button class="dir-tab" onclick="switchDir('bus',this)">버스</button>
-          <button class="dir-tab" onclick="switchDir('car',this)">자가용</button>
-          <button class="dir-tab" onclick="switchDir('parking',this)">주차</button>
-        </div>
-        <div class="dir-content active" id="dir-subway">
-          <div class="info-item"><div class="info-icon">🚇</div><div class="info-body"><div class="title">교통 정보 준비 중</div><div class="desc">내용 확정 후 업데이트됩니다.</div></div></div>
-        </div>
-        <div class="dir-content" id="dir-bus">
-          <div class="info-item"><div class="info-icon">🚌</div><div class="info-body"><div class="title">교통 정보 준비 중</div><div class="desc">내용 확정 후 업데이트됩니다.</div></div></div>
-        </div>
-        <div class="dir-content" id="dir-car">
-          <div class="info-item"><div class="info-icon">🚗</div><div class="info-body"><div class="title">교통 정보 준비 중</div><div class="desc">내용 확정 후 업데이트됩니다.</div></div></div>
-        </div>
-        <div class="dir-content" id="dir-parking">
-          <div class="info-item"><div class="info-icon">🅿️</div><div class="info-body"><div class="title">주차 정보 준비 중</div><div class="desc">내용 확정 후 업데이트됩니다.</div></div></div>
         </div>
       </div>
     </div>
@@ -297,9 +258,6 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
   </button>
   <button class="nav-item" id="nav-schedule" onclick="goPage('schedule')">
     <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>일정
-  </button>
-  <button class="nav-item" id="nav-directions" onclick="goPage('directions')">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>오시는 길
   </button>
 </nav>
 
@@ -332,12 +290,7 @@ document.getElementById('phone').addEventListener('input',function(){
 });
 
 let cCount=0;
-function switchDir(id,btn){
-  document.querySelectorAll('.dir-content').forEach(d=>d.classList.remove('active'));
-  document.querySelectorAll('.dir-tab').forEach(b=>b.classList.remove('active'));
-  document.getElementById('dir-'+id).classList.add('active');
-  btn.classList.add('active');
-}
+
 function switchGallery(id,btn){
   document.getElementById('gallery-before').style.display=id==='before'?'block':'none';
   document.getElementById('gallery-after').style.display=id==='after'?'block':'none';
