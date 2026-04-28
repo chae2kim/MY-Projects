@@ -47,16 +47,6 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .chip-input:checked+.chip-label{background:var(--navy);border-color:var(--navy);color:#fff}
 #other-wrap{display:none;margin-top:10px}
 #other-wrap.show{display:block}
-.companion-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px}
-.companion-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.companion-num{font-size:12px;font-weight:600;color:var(--navy);letter-spacing:0.04em}
-.remove-btn{background:none;border:none;color:var(--dim);cursor:pointer;font-size:20px;line-height:1;padding:0 4px;border-radius:6px;transition:color 0.15s}
-.remove-btn:hover{color:var(--error)}
-.companion-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.add-companion-btn{width:100%;background:var(--white);border:1.5px dashed var(--border);border-radius:10px;padding:13px;font-size:14px;font-weight:500;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.15s;font-family:'Noto Sans KR',sans-serif;margin-top:4px}
-.add-companion-btn:hover{border-color:var(--navy);color:var(--navy);background:var(--navy-light)}
-.plus-icon{width:20px;height:20px;background:var(--navy-light);color:var(--navy);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;transition:background 0.15s;flex-shrink:0}
-.add-companion-btn:hover .plus-icon{background:var(--navy);color:#fff}
 .submit-btn{width:100%;background:var(--navy);border:none;border-radius:12px;padding:16px;font-size:16px;font-weight:600;color:#fff;cursor:pointer;font-family:'Noto Sans KR',sans-serif;letter-spacing:0.02em;transition:all 0.2s;margin-top:6px;box-shadow:0 4px 14px rgba(26,47,94,0.25)}
 .submit-btn:hover{background:var(--navy2);transform:translateY(-1px)}
 .submit-btn:active{transform:translateY(0)}
@@ -76,22 +66,6 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .badge-navy{background:var(--navy-light);color:var(--navy)}
 .badge-green{background:#e6f4ea;color:#1e6b3a}
 .badge-gray{background:var(--surface);color:var(--muted)}
-.coming-soon-block{background:var(--surface);border:1.5px dashed var(--border);border-radius:10px;padding:22px;text-align:center;color:var(--dim);font-size:13px;font-family:'DM Mono',monospace}
-.info-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--surface)}
-.info-item:last-child{border-bottom:none}
-.info-icon{font-size:18px;width:28px;text-align:center;flex-shrink:0;margin-top:1px}
-.info-body .title{font-size:14px;font-weight:500;color:var(--text)}
-.info-body .desc{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.6}
-.gallery-tabs{display:flex;gap:8px;margin-bottom:16px}
-.gallery-tab{padding:8px 18px;border-radius:100px;border:1.5px solid var(--border);font-size:13px;cursor:pointer;color:var(--muted);background:var(--surface);font-family:'Noto Sans KR',sans-serif;font-weight:500;transition:all 0.15s}
-.gallery-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
-.upload-zone{background:var(--surface);border:2px dashed var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:all 0.2s;margin-bottom:16px}
-.upload-zone:hover{border-color:var(--navy);background:var(--navy-light)}
-.upload-zone .upload-icon{font-size:32px;margin-bottom:10px}
-.upload-zone .upload-text{font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px}
-.upload-zone .upload-sub{font-size:12px;color:var(--muted)}
-.gallery-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.gallery-cell{background:var(--surface);border-radius:10px;aspect-ratio:1;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:20px;border:1px solid var(--border)}
 #success-screen{display:none;padding:60px 24px;text-align:center;opacity:0;transition:opacity 0.4s}
 #success-screen.visible{display:block;opacity:1}
 .success-circle{width:76px;height:76px;background:linear-gradient(135deg,var(--navy),#2a4a8e);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 20px;box-shadow:0 8px 24px rgba(26,47,94,0.25)}
@@ -137,6 +111,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     <div style="padding:16px 0 0">
       <div id="rsvp-form-wrap">
         <form id="rsvp-form" novalidate>
+
+          <!-- 신청자 정보 -->
           <div class="card">
             <div class="card-title">신청자 정보</div>
             <div class="input-group">
@@ -150,6 +126,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
               <span class="error-msg" id="phone-error">연락처를 입력해주세요.</span>
             </div>
           </div>
+
+          <!-- 참석 구분 -->
           <div class="card">
             <div class="card-title">참석 구분<span class="req">*</span></div>
             <div class="chip-group">
@@ -162,15 +140,19 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
             </div>
             <span class="error-msg" id="route-error">참석 구분을 선택해주세요.</span>
           </div>
+
+          <!-- 동반인 수 -->
           <div class="card">
             <div class="card-title">동반인 수 <span style="font-size:11px;font-weight:400;color:var(--dim);text-transform:none;letter-spacing:0">최대 3명</span></div>
-            <div class="chip-group" id="companion-group">
+            <div class="chip-group">
               <input class="chip-input" type="radio" name="companion" id="c0" value="0"><label class="chip-label" for="c0">없음</label>
               <input class="chip-input" type="radio" name="companion" id="c1" value="1"><label class="chip-label" for="c1">1명</label>
               <input class="chip-input" type="radio" name="companion" id="c2" value="2"><label class="chip-label" for="c2">2명</label>
               <input class="chip-input" type="radio" name="companion" id="c3" value="3"><label class="chip-label" for="c3">3명</label>
             </div>
           </div>
+
+          <!-- 사전 질문 -->
           <div class="card">
             <div class="card-title">사전 질문</div>
             <div class="input-group">
@@ -182,18 +164,36 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
               <textarea class="text-input" id="q2" placeholder="EX. 행사는 몇시에 끝나나요?" style="resize:vertical;min-height:80px;line-height:1.7"></textarea>
             </div>
           </div>
+
+          <!-- 식사 및 네트워킹 -->
+          <div class="card">
+            <div class="card-title">식사 및 네트워킹 참여 여부 <span style="font-size:11px;font-weight:400;color:var(--dim);text-transform:none;letter-spacing:0">선택</span></div>
+            <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:14px">동문회 발대식 이후 식사 및 네트워킹이 예정되어 있습니다.<br>공식 행사 이후 자유롭게 참여하실 수 있는 자리입니다.<br><span style="color:var(--navy);font-weight:500">* 재학생 및 졸업생만 참여 가능합니다.</span></p>
+            <div class="chip-group">
+              <input class="chip-input" type="radio" name="dinner" id="d1" value="참석"><label class="chip-label" for="d1">참석</label>
+              <input class="chip-input" type="radio" name="dinner" id="d2" value="미참석"><label class="chip-label" for="d2">미참석</label>
+            </div>
+          </div>
+
+          <!-- 기타 전달 사항 -->
           <div class="card">
             <div class="card-title">기타 전달 사항</div>
             <textarea class="text-input" id="message" placeholder="궁금한 점이나 전달하고 싶은 내용을 자유롭게 작성해주세요." style="resize:vertical;min-height:90px;line-height:1.7"></textarea>
           </div>
+
+          <!-- 최종 확인 -->
           <div class="card" style="background:var(--navy-light);border-color:#c5cde8;margin-bottom:4px">
             <p style="font-size:13px;color:var(--navy);line-height:1.7;text-align:center">✅ 입력하신 정보가 정확한지 제출 전 다시 한 번 확인 부탁드립니다.</p>
           </div>
+
           <div style="padding:0 16px 8px">
             <button type="submit" class="submit-btn" id="submit-btn">참석 신청하기 →</button>
           </div>
+
         </form>
       </div>
+
+      <!-- 완료 화면 -->
       <div id="success-screen">
         <div class="success-circle">🎉</div>
         <h2 class="success-title">신청이 완료되었습니다!</h2>
@@ -246,7 +246,6 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     </div>
   </div>
 
-
 </div>
 
 <nav class="bottom-nav">
@@ -289,14 +288,6 @@ document.getElementById('phone').addEventListener('input',function(){
   else this.value=n.slice(0,3)+'-'+n.slice(3,7)+'-'+n.slice(7,11);
 });
 
-let cCount=0;
-
-function switchGallery(id,btn){
-  document.getElementById('gallery-before').style.display=id==='before'?'block':'none';
-  document.getElementById('gallery-after').style.display=id==='after'?'block':'none';
-  document.querySelectorAll('.gallery-tab').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-}
 function showError(id,msg){
   const el=document.getElementById(id);
   if(msg){el.textContent=msg;el.classList.add('show');}else el.classList.remove('show');
@@ -321,6 +312,7 @@ function validate(){
   if(!route)ok=false;
   return ok;
 }
+
 document.getElementById('rsvp-form').addEventListener('submit',async function(e){
   e.preventDefault();
   if(!validate())return;
@@ -328,7 +320,8 @@ document.getElementById('rsvp-form').addEventListener('submit',async function(e)
   btn.disabled=true;btn.textContent='제출 중...';
   const routeVal=document.querySelector('input[name="route"]:checked').value;
   const otherText=document.getElementById('other-text').value.trim();
-  const companionVal=document.querySelector('input[name="companion"]:checked')?.value||'0';
+  const companionVal=document.querySelector('input[name="companion"]:checked')?.value||'미선택';
+  const dinnerVal=document.querySelector('input[name="dinner"]:checked')?.value||'미응답';
   try{
     await fetch(APPS_SCRIPT_URL,{
       method:'POST',
@@ -338,10 +331,11 @@ document.getElementById('rsvp-form').addEventListener('submit',async function(e)
         timestamp:new Date().toLocaleString('ko-KR'),
         name:document.getElementById('name').value.trim(),
         phone:document.getElementById('phone').value.trim(),
-        route:routeVal==='기타'&&otherText?`기타(${otherText})`:routeVal,
+        route:routeVal==='기타'&&otherText?'기타('+otherText+')':routeVal,
         companions:companionVal,
         q1:document.getElementById('q1').value.trim(),
         q2:document.getElementById('q2').value.trim(),
+        dinner:dinnerVal,
         message:document.getElementById('message').value.trim()
       })
     });
