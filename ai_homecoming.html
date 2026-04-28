@@ -167,12 +167,13 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 
           <!-- 식사 및 네트워킹 -->
           <div class="card">
-            <div class="card-title">식사 및 네트워킹 참여 여부 <span style="font-size:11px;font-weight:400;color:var(--dim);text-transform:none;letter-spacing:0">선택</span></div>
+            <div class="card-title">식사 및 네트워킹 참여 여부 <span style="font-size:11px;font-weight:400;color:var(--error);text-transform:none;letter-spacing:0">(필수)</span></div>
             <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:14px">동문회 발대식 이후 식사 및 네트워킹이 예정되어 있습니다.<br>공식 행사 이후 자유롭게 참여하실 수 있는 자리입니다.<br><span style="color:var(--navy);font-weight:500">* 재학생 및 졸업생만 참여 가능합니다.</span></p>
             <div class="chip-group">
               <input class="chip-input" type="radio" name="dinner" id="d1" value="참석"><label class="chip-label" for="d1">참석</label>
               <input class="chip-input" type="radio" name="dinner" id="d2" value="미참석"><label class="chip-label" for="d2">미참석</label>
             </div>
+            <span class="error-msg" id="dinner-error">참여 여부를 선택해주세요.</span>
           </div>
 
           <!-- 기타 전달 사항 -->
@@ -310,6 +311,9 @@ function validate(){
   else showError('phone-error','');
   showError('route-error',route?'':'참석 구분을 선택해주세요.');
   if(!route)ok=false;
+  const dinner=document.querySelector('input[name="dinner"]:checked');
+  showError('dinner-error',dinner?'':'참여 여부를 선택해주세요.');
+  if(!dinner)ok=false;
   return ok;
 }
 
