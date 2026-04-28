@@ -169,7 +169,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
             <span class="error-msg" id="route-error">참석 구분을 선택해주세요.</span>
           </div>
           <div class="card">
-            <div class="card-title">동반인 <span style="font-size:11px;font-weight:400;color:var(--dim);text-transform:none;letter-spacing:0">최대 3명</span></div>
+            <div class="card-title">동반인 수 <span style="font-size:11px;font-weight:400;color:var(--dim);text-transform:none;letter-spacing:0">최대 3명</span></div>
             <div class="chip-group" id="companion-group">
               <input class="chip-input" type="radio" name="companion" id="c0" value="0"><label class="chip-label" for="c0">없음</label>
               <input class="chip-input" type="radio" name="companion" id="c1" value="1"><label class="chip-label" for="c1">1명</label>
@@ -180,17 +180,20 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
           <div class="card">
             <div class="card-title">사전 질문</div>
             <div class="input-group">
-              <label class="input-label">이번 홈커밍 데이에서 얻어가고 싶은 것은 무엇인가요?</label>
+              <label class="input-label">이번 홈커밍 데이에서 얻어가고 싶은 점이 있다면 자유롭게 작성해주세요.</label>
               <textarea class="text-input" id="q1" placeholder="EX. AI시대의 기업가 정신이란 무엇인가요?" style="resize:vertical;min-height:80px;line-height:1.7"></textarea>
             </div>
             <div class="input-group" style="margin-bottom:0">
-              <label class="input-label">행사와 관련해 궁금한 사항이 있으신가요?</label>
+              <label class="input-label">토크쇼에서 다뤘으면 하는 질문이 있다면 남겨주세요.</label>
               <textarea class="text-input" id="q2" placeholder="EX. 행사는 몇시에 끝나나요?" style="resize:vertical;min-height:80px;line-height:1.7"></textarea>
             </div>
           </div>
           <div class="card">
             <div class="card-title">기타 전달 사항</div>
             <textarea class="text-input" id="message" placeholder="궁금한 점이나 전달하고 싶은 내용을 자유롭게 작성해주세요." style="resize:vertical;min-height:90px;line-height:1.7"></textarea>
+          </div>
+          <div class="card" style="background:var(--navy-light);border-color:#c5cde8;margin-bottom:4px">
+            <p style="font-size:13px;color:var(--navy);line-height:1.7;text-align:center">✅ 입력하신 정보가 정확한지 제출 전 다시 한 번 확인 부탁드립니다.</p>
           </div>
           <div style="padding:0 16px 8px">
             <button type="submit" class="submit-btn" id="submit-btn">참석 신청하기 →</button>
@@ -211,27 +214,41 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
       <div class="card">
         <div class="card-title">행사 일정</div>
         <div class="tl-item">
-          <div class="tl-time">TBD</div>
+          <div class="tl-time">13:30</div>
           <div class="tl-line"><div class="tl-dot"></div><div class="tl-bar"></div></div>
-          <div class="tl-body"><div class="tl-title">등록 및 접수</div><div class="tl-desc">행사장 입장 및 명찰 수령</div><span class="tl-badge badge-gray">준비</span></div>
+          <div class="tl-body"><div class="tl-title">등록 및 입장</div><div class="tl-desc">행사장 입장 및 명찰 수령</div><span class="tl-badge badge-gray">준비</span></div>
         </div>
         <div class="tl-item">
-          <div class="tl-time">TBD</div>
+          <div class="tl-time">14:00</div>
           <div class="tl-line"><div class="tl-dot"></div><div class="tl-bar"></div></div>
-          <div class="tl-body"><div class="tl-title">개회식 · 환영사</div><div class="tl-desc">준비 중</div><span class="tl-badge badge-navy">키노트</span></div>
+          <div class="tl-body"><div class="tl-title">개회사 · 오프닝</div><div class="tl-desc">행사 시작 및 환영사</div><span class="tl-badge badge-navy">오프닝</span></div>
         </div>
         <div class="tl-item">
-          <div class="tl-time">TBD</div>
+          <div class="tl-time">14:20</div>
           <div class="tl-line"><div class="tl-dot"></div><div class="tl-bar"></div></div>
-          <div class="tl-body"><div class="tl-title">세션</div><div class="tl-desc">준비 중</div><span class="tl-badge badge-green">세션</span></div>
+          <div class="tl-body"><div class="tl-title">[1부] AI 비즈니스 토크쇼</div><div class="tl-desc">교수진 · 현업 패널 인사이트 대담</div><span class="tl-badge badge-green">세션</span></div>
         </div>
         <div class="tl-item">
-          <div class="tl-time">TBD</div>
+          <div class="tl-time">16:00</div>
+          <div class="tl-line"><div class="tl-dot"></div><div class="tl-bar"></div></div>
+          <div class="tl-body"><div class="tl-title">휴식</div><div class="tl-desc">다과 및 네트워킹</div><span class="tl-badge badge-gray">브레이크</span></div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-time">16:30</div>
+          <div class="tl-line"><div class="tl-dot"></div><div class="tl-bar"></div></div>
+          <div class="tl-body"><div class="tl-title">[2부] 동문회 발대식</div><div class="tl-desc">전공 소개 및 동문 회장 임명장 전달</div><span class="tl-badge badge-navy">세레모니</span></div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-time">16:50</div>
+          <div class="tl-line"><div class="tl-dot"></div><div class="tl-bar"></div></div>
+          <div class="tl-body"><div class="tl-title">단체사진</div><div class="tl-desc">촬영 및 마무리 안내</div><span class="tl-badge badge-gray">포토</span></div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-time">17:00~</div>
           <div class="tl-line"><div class="tl-dot"></div></div>
-          <div class="tl-body"><div class="tl-title">네트워킹 · 마무리</div><div class="tl-desc">준비 중</div><span class="tl-badge badge-gray">네트워킹</span></div>
+          <div class="tl-body"><div class="tl-title">식사 및 네트워킹</div><div class="tl-desc">외부 식사 및 자유 교류</div><span class="tl-badge badge-green">네트워킹</span></div>
         </div>
       </div>
-      <p style="font-size:12px;color:var(--dim);text-align:center;font-family:'DM Mono',monospace;padding:0 16px">* 세부 일정은 추후 업데이트됩니다</p>
     </div>
   </div>
 
