@@ -305,6 +305,8 @@ document.querySelector('label[for="d1"]').addEventListener('click',function(e){
 });
 
 function showError(id,msg){
+  const el=document.getElementById(id);
+  if(!el)return;
   if(msg){el.textContent=msg;el.classList.add('show');}else el.classList.remove('show');
 }
 function showToast(msg){
