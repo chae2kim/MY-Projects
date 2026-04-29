@@ -167,13 +167,14 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 
           <!-- 식사 및 네트워킹 -->
           <div class="card">
-            <div class="card-title">식사 및 네트워킹 참여 여부 <span style="font-size:11px;font-weight:400;color:var(--error);text-transform:none;letter-spacing:0">(필수)</span></div>
-            <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:14px">동문회 발대식 이후 식사 및 네트워킹이 예정되어 있습니다.<br>공식 행사 이후 자유롭게 참여하실 수 있는 자리입니다.<br><span style="color:var(--navy);font-weight:500">* 재학생 및 졸업생만 참여 가능합니다.</span></p>
+            <div class="card-title">식사 및 네트워킹 참여 여부 <span style="font-size:11px;font-weight:400;color:var(--dim);text-transform:none;letter-spacing:0">(선택)</span></div>
+            <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:14px">동문회 발대식 이후 식사 및 네트워킹이 예정되어 있습니다.<br>공식 행사 이후 자유롭게 참여하실 수 있는 자리입니다.<br><span style="color:var(--navy);font-weight:500">* 경희대 재학생 및 졸업생만 참여 가능합니다.</span></p>
             <div class="chip-group">
               <input class="chip-input" type="radio" name="dinner" id="d1" value="참석"><label class="chip-label" for="d1">참석</label>
-              <input class="chip-input" type="radio" name="dinner" id="d2" value="미참석"><label class="chip-label" for="d2">미참석</label>
             </div>
-            <span class="error-msg" id="dinner-error">참여 여부를 선택해주세요.</span>
+            <div id="dinner-thanks" style="display:none;margin-top:14px;background:var(--navy-light);border-radius:10px;padding:14px">
+              <p style="font-size:13px;color:var(--navy);line-height:1.8">귀한 시간 내어 참석해주셔서 감사합니다.<br>많은 분들을 모시고 싶으나, 3부에는 경희대 경영대학원 동문회가 예정되어 있습니다.<br>곧, 좋은 자리로 대접하겠습니다.</p>
+            </div>
           </div>
 
           <!-- 기타 전달 사항 -->
@@ -289,8 +290,27 @@ document.getElementById('phone').addEventListener('input',function(){
   else this.value=n.slice(0,3)+'-'+n.slice(3,7)+'-'+n.slice(7,11);
 });
 
+// 식사 참석 토글 (다시 누르면 해제)
+let dinnerChecked = false;
+document.querySelector('label[for="d1"]').addEventListener('mousedown',function(){
+  if(document.getElementById('d1').checked) dinnerChecked=true;
+  else dinnerChecked=false;
+});
+document.querySelector('label[for="d1"]').addEventListener('touchstart',function(){
+  if(document.getElementById('d1').checked) dinnerChecked=true;
+  else dinnerChecked=false;
+},{passive:true});
+document.getElementById('d1').addEventListener('click',function(){
+  if(dinnerChecked){
+    this.checked=false;
+    dinnerChecked=false;
+    document.getElementById('dinner-thanks').style.display='none';
+  } else {
+    document.getElementById('dinner-thanks').style.display='block';
+  }
+});
+
 function showError(id,msg){
-  const el=document.getElementById(id);
   if(msg){el.textContent=msg;el.classList.add('show');}else el.classList.remove('show');
 }
 function showToast(msg){
@@ -311,9 +331,6 @@ function validate(){
   else showError('phone-error','');
   showError('route-error',route?'':'참석 구분을 선택해주세요.');
   if(!route)ok=false;
-  const dinner=document.querySelector('input[name="dinner"]:checked');
-  showError('dinner-error',dinner?'':'참여 여부를 선택해주세요.');
-  if(!dinner)ok=false;
   return ok;
 }
 
