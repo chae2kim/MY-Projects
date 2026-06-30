@@ -330,7 +330,7 @@ const CATS=[...new Set(MODELS.map(m=>m.cat))];
 const $=id=>document.getElementById(id);
 let sel=null, activeCat=null, photoMode=1;
 let photos=[], capturing=false;
-let endpoint="", worker="";
+let endpoint="https://script.google.com/macros/s/AKfycbyjs47ayp6YQp94p0q06vPIjok-LmBGI5_IhKQWeG4H-N2GJ7SP0E2oDF_agdGeqYTp/exec", worker="";
 let shot=0, fail=0;
 let recent=[], holds=[], savedKeys=new Set();
 let repairTarget=null, resumeNum=null, pendingDup=false;
