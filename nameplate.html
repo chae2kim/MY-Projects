@@ -93,7 +93,9 @@
   .camMsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#cdd6e6;font-size:13px;text-align:center;padding:20px;flex-direction:column;gap:12px}
   .camMsg button{background:var(--blue);color:#fff;border:none;border-radius:10px;padding:11px 18px;font-weight:700}
   .capActions{padding:12px 14px}
-  .shootBtn{width:100%;border:none;border-radius:14px;padding:16px;font-size:17px;font-weight:800;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:9px}
+  .shootBtn{width:100%;border:none;border-radius:14px;padding:16px;font-size:17px;font-weight:800;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:9px;transition:background .12s}
+  .shootBtn.save{background:var(--ok)} .shootBtn.save:active{background:#15875c}
+  .shootBtn.more{background:var(--warn)} .shootBtn.more:active{background:#c97a00}
   .shootBtn:active{background:var(--blue-press)} .shootBtn:disabled{background:#c3cde0}
   .subActions{display:flex;gap:8px}
   .subActions button{flex:1;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 6px;font-size:13.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--sub)}
@@ -211,7 +213,7 @@
       <div class="camMsg" id="camMsg" style="display:none"></div>
     </div>
     <div class="capActions">
-      <button class="shootBtn" id="shootBtn"><span>📷</span><span id="shootTxt">촬영 / 저장</span></button>
+      <button class="shootBtn" id="shootBtn"><span id="shootTxt">📷 촬영</span></button>
       <div class="subActions">
         <button id="retakeBtn">↻ 재촬영</button>
         <button class="hold" id="holdBtn">⏱ 보류</button>
@@ -420,10 +422,14 @@ let capState="live"; // live | shot1(2장모드 1장후) | shotDone
 function showLive(){ $("video").style.display="block"; $("freeze").style.display="none"; }
 function showFreeze(d){ $("video").style.display="none"; $("freeze").src=d; $("freeze").style.display="block"; }
 function updateMainBtn(){
-  let t = capState==="live" ? (repairTarget?"수리품 촬영":"촬영 / 저장")
-        : capState==="shot1" ? "＋ 한 장 더 촬영"
-        : "저장 ("+photos.length+"장)";
+  const btn=$("shootBtn");
+  let t, cls="";
+  if(capState==="live"){ t=repairTarget?"📷 수리품 촬영":"📷 촬영"; cls=""; }
+  else if(capState==="shot1"){ t="📷 한 장 더 촬영"; cls=""; }
+  else { t="💾 저장"; cls="save"; }
   $("shootTxt").textContent=t;
+  btn.classList.remove("save","more");
+  if(cls) btn.classList.add(cls);
 }
 $("shootBtn").onclick=onMainBtn;
 function onMainBtn(){
