@@ -437,8 +437,17 @@ function onMainBtn(){
 }
 function doShoot(){
   if(stream){
-    const v=$("video"),cv=$("cv"),mw=1280,s=Math.min(1,mw/v.videoWidth),w=Math.round(v.videoWidth*s),h=Math.round(v.videoHeight*s);
-    cv.width=w;cv.height=h;cv.getContext("2d").drawImage(v,0,0,w,h);
+    const v=$("video"), cam=$("camWrap"), cv=$("cv");
+    const vw=v.videoWidth||1280, vh=v.videoHeight||960;
+    const cw=cam.clientWidth||4, ch=cam.clientHeight||3;
+    // 화면은 object-fit:cover → 보이는 영역만 잘라서 저장
+    const scale=Math.max(cw/vw, ch/vh);
+    const sw=cw/scale, sh=ch/scale;
+    const sx=(vw-sw)/2, sy=(vh-sh)/2;
+    const outW=Math.min(1280, Math.round(sw));
+    const outH=Math.round(outW*(sh/sw));
+    cv.width=outW; cv.height=outH;
+    cv.getContext("2d").drawImage(v, sx,sy,sw,sh, 0,0,outW,outH);
     pushPhoto(cv.toDataURL("image/jpeg",0.7));
   }else{
     let inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.capture="environment";
