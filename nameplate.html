@@ -42,7 +42,8 @@
   .fld>label{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:7px}
   input[type=text],input[type=search],input[type=month],input[type=number]{
     width:100%;background:var(--panel);border:1px solid var(--line);color:var(--ink);
-    border-radius:11px;padding:13px 14px;font-size:16px;outline:none}
+    border-radius:11px;padding:13px 14px;font-size:16px;outline:none;text-align:left}
+  input[type=month]{-webkit-appearance:none;appearance:none}
   input:focus{border-color:var(--blue)}
   .selbox{position:relative}
   .selbox .val{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px 14px;font-size:16px;color:var(--blue);font-weight:700;text-align:left;display:flex;justify-content:space-between;align-items:center}
@@ -89,12 +90,8 @@
   .camWrap{margin:12px 14px 0;border-radius:14px;overflow:hidden;background:#0b1220;position:relative;aspect-ratio:4/3;flex:0 0 auto}
   .camWrap video,.camWrap img{width:100%;height:100%;object-fit:cover;display:block}
   .guide{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
-  .guide .frame{width:84%;height:62%;border:2px dashed rgba(255,255,255,.9);border-radius:10px;position:relative;box-shadow:0 0 0 2000px rgba(0,0,0,.18)}
+  .guide .frame{width:84%;height:62%;border:1.5px dashed rgba(255,255,255,.75);border-radius:10px;position:relative}
   .guide .cap{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);color:#fff;font-size:13px;font-weight:700;text-shadow:0 1px 3px #000;white-space:nowrap}
-  .guide .cross{position:absolute;top:50%;left:50%;width:34px;height:34px;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%}
-  .guide .cross::before,.guide .cross::after{content:"";position:absolute;background:#fff}
-  .guide .cross::before{left:50%;top:-8px;width:2px;height:50px;transform:translateX(-50%)}
-  .guide .cross::after{top:50%;left:-8px;height:2px;width:50px;transform:translateY(-50%)}
   .camMsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#cdd6e6;font-size:13px;text-align:center;padding:20px;flex-direction:column;gap:12px}
   .camMsg button{background:var(--blue);color:#fff;border:none;border-radius:10px;padding:11px 18px;font-weight:700}
   .capActions{padding:12px 14px}
@@ -214,7 +211,7 @@
       <video id="video" playsinline autoplay muted></video>
       <img id="freeze" style="display:none">
       <div class="guide" id="guide">
-        <div class="frame"><div class="cross"></div><div class="cap">명판을 이 영역에 맞춰주세요</div></div>
+        <div class="frame"><div class="cap">명판을 이 영역에 맞춰주세요</div></div>
       </div>
       <div class="camMsg" id="camMsg" style="display:none"></div>
     </div>
