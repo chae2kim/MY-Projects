@@ -165,11 +165,11 @@
       <div class="fld">
         <label>SN 시작번호</label>
         <div class="snrow">
-          <div class="pre"><input type="text" id="prefix" placeholder="6B" autocomplete="off"></div>
+          <div class="pre"><input type="text" id="prefix" placeholder="6A410" autocomplete="off"></div>
           <div class="dash">–</div>
-          <div class="num"><input type="text" id="numpart" inputmode="numeric" placeholder="1601298" autocomplete="off"></div>
+          <div class="num"><input type="text" id="numpart" inputmode="numeric" maxlength="4" placeholder="0001" autocomplete="off"></div>
         </div>
-        <div class="hint">저장 시 공백 없이 저장됩니다. (예: 6B1601298)</div>
+        <div class="hint">뒤 4자리 숫자만 입력. 저장은 공백 없이 (예: 6A4100001)</div>
       </div>
       <div class="fld">
         <label>사진 장수</label>
@@ -307,20 +307,20 @@
 <script>
 /* ── 모델 (77, 단종 제외) ── */
 const MODELS=[
- ["D054","EK","EK-610i-K","Q9"],["D054","EK","EK-6100i-K","Q9"],
- ["D054-1","EW","EW-600i-K","6A"],["D054-1","EW","EW-1500i-K","P2"],["D054-1","EW","EW-12Ki-K","P6"],
- ["D055","FG","FG-30KAM-K","Q1"],["D055","FG","FG-30KBM-K","Q1"],["D055","FG","FG-60KAM-K","Q1"],["D055","FG","FG-60KBM-K","Q1"],["D055","FG","FG-60KAL-K","Q1"],["D055","FG","FG-150KAM-K","Q1"],["D055","FG","FG-150KBM-K","Q1"],["D055","FG","FG-150KAL-K","Q1"],
- ["D055","AD6207/08","AD-6207A","Q5"],["D055","AD6207/08","AD-6207B","Q5"],
- ["D075-1","SQ/SR","SQ-6K","5A"],["D075-1","SQ/SR","SQ-15K","5A"],["D075-1","SQ/SR","SQ-30K","5A"],["D075-1","SQ/SR","SR-6K","5A"],["D075-1","SQ/SR","SR-15K","5A"],["D075-1","SQ/SR","SR-30K","5A"],
- ["D0920","HL-IWP","HL-1000iWP-K","6A"],["D0920","HL-IWP","HL-2000iWP-K","6A"],
- ["D0920","SK-IWP","SK-1000iWP","6A"],["D0920","SK-IWP","SK-2000iWP","6A"],["D0920","SK-IWP","SK-5000iWP","6A"],["D0920","SK-IWP","SK-10KiWP","6A"],["D0920","SK-IWP","SK-20KiWP","6A"],
- ["D1013","SK-I","SK-1000i","6B"],["D1013","SK-I","SK-2000i","6B"],["D1013","SK-I","SK-5000i","6B"],["D1013","SK-I","SK-10Ki","6B"],["D1013","SK-I","SK-20Ki","6B"],["D1013","SK-I","SK-30Ki","6B"],["D1013","SK-I","SK-30KiWP","6A"],
- ["D1146","SC/SE","SC-30KAM-K","6A"],["D1146","SC/SE","SC-30KBM-K","6A"],["D1146","SC/SE","SE-30KAM-K","6A"],["D1146","SC/SE","SE-30KBM-K","6A"],["D1146","SC/SE","SC-60KAM-K","6A"],["D1146","SC/SE","SC-60KAL-K","6A"],["D1146","SC/SE","SC-60KBM-K","6A"],["D1146","SC/SE","SC-60KBL-K","6A"],["D1146","SC/SE","SE-60KAM-K","6A"],["D1146","SC/SE","SE-60KAL-K","6A"],["D1146","SC/SE","SE-60KBM-K","6A"],["D1146","SC/SE","SE-60KBL-K","6A"],["D1146","SC/SE","SC-150KAM-K","6A"],["D1146","SC/SE","SC-150KAL-K","6A"],["D1146","SC/SE","SC-150KBM-K","6A"],["D1146","SC/SE","SC-150KBL-K","6A"],["D1146","SC/SE","SE-150KAM-K","6A"],["D1146","SC/SE","SE-150KAL-K","6A"],["D1146","SC/SE","SE-150KBM-K","6A"],["D1146","SC/SE","SE-150KBL-K","6A"],
- ["D1156","SW","SW-6KS-K","6A"],["D1156","SW","SW-15KS-K","6A"],["D1156","SW","SW-15KM-K","6A"],["D1156","SW","SW-30KM-K","6A"],["D1156","SW","SW-60KM-K","6A"],["D1156","SW","SW-60KL-K","6A"],["D1156","SW","SW-150KM-K","6A"],["D1156","SW","SW-150KL-K","6A"],
- ["D127","AD6209/10","AD-6209","6A"],["D127","AD6209/10","AD-6210","6A"],
- ["D174","HVC","HV-15KC-K","6B"],["D174","HVC","HV-15KCP-K","6B"],["D174","HVC","HV-60KC-K","6B"],["D174","HVC","HV-60KCP-K","6B"],["D174","HVC","HV-200KC-K","6B"],["D174","HVC","HV-200KCP-K","6B"],
- ["D1912","HVC-WP","HV-15KCWP-K","6B"],["D1912","HVC-WP","HV-60KCWP-K","6B"],["D1912","HVC-WP","HV-200KCWP-K","6B"],
- ["D2013","HVC-EP","HV-15KCEP-K","6B"],["D2013","HVC-EP","HV-60KCEP-K","6B"],["D2013","HVC-EP","HV-200KCEP-K","6B"]
+ ["D054","EK","EK-610i-K","Q950"],["D054","EK","EK-6100i-K","Q960"],
+ ["D054-1","EW","EW-600i-K","6A391"],["D054-1","EW","EW-1500i-K","P201"],["D054-1","EW","EW-12Ki-K","P600"],
+ ["D055","FG","FG-30KAM-K","Q113"],["D055","FG","FG-30KBM-K","Q162"],["D055","FG","FG-60KAM-K","Q122"],["D055","FG","FG-60KBM-K","Q171"],["D055","FG","FG-60KAL-K","Q141"],["D055","FG","FG-150KAM-K","Q131"],["D055","FG","FG-150KBM-K","Q180"],["D055","FG","FG-150KAL-K","Q151"],
+ ["D055","AD6207/08","AD-6207A","Q540"],["D055","AD6207/08","AD-6207B","Q550"],
+ ["D075-1","SQ/SR","SQ-6K","5A080"],["D075-1","SQ/SR","SQ-15K","5A090"],["D075-1","SQ/SR","SQ-30K","5A100"],["D075-1","SQ/SR","SR-6K","5A110"],["D075-1","SQ/SR","SR-15K","5A120"],["D075-1","SQ/SR","SR-30K","5A130"],
+ ["D0920","HL-IWP","HL-1000iWP-K","6A301"],["D0920","HL-IWP","HL-2000iWP-K","6A301"],
+ ["D0920","SK-IWP","SK-1000iWP","6A293"],["D0920","SK-IWP","SK-2000iWP","6A293"],["D0920","SK-IWP","SK-5000iWP","6A293"],["D0920","SK-IWP","SK-10KiWP","6A293"],["D0920","SK-IWP","SK-20KiWP","6A293"],
+ ["D1013","SK-I","SK-1000i","6B713"],["D1013","SK-I","SK-2000i","6B713"],["D1013","SK-I","SK-5000i","6B713"],["D1013","SK-I","SK-10Ki","6B713"],["D1013","SK-I","SK-20Ki","6B713"],["D1013","SK-I","SK-30Ki","6B713"],["D1013","SK-I","SK-30KiWP","6A293"],
+ ["D1146","SC/SE","SC-30KAM-K","6A410"],["D1146","SC/SE","SC-30KBM-K","6A410"],["D1146","SC/SE","SE-30KAM-K","6A420"],["D1146","SC/SE","SE-30KBM-K","6A420"],["D1146","SC/SE","SC-60KAM-K","6A410"],["D1146","SC/SE","SC-60KAL-K","6A410"],["D1146","SC/SE","SC-60KBM-K","6A410"],["D1146","SC/SE","SC-60KBL-K","6A410"],["D1146","SC/SE","SE-60KAM-K","6A420"],["D1146","SC/SE","SE-60KAL-K","6A420"],["D1146","SC/SE","SE-60KBM-K","6A420"],["D1146","SC/SE","SE-60KBL-K","6A420"],["D1146","SC/SE","SC-150KAM-K","6A410"],["D1146","SC/SE","SC-150KAL-K","6A410"],["D1146","SC/SE","SC-150KBM-K","6A410"],["D1146","SC/SE","SC-150KBL-K","6A410"],["D1146","SC/SE","SE-150KAM-K","6A420"],["D1146","SC/SE","SE-150KAL-K","6A420"],["D1146","SC/SE","SE-150KBM-K","6A420"],["D1146","SC/SE","SE-150KBL-K","6A420"],
+ ["D1156","SW","SW-6KS-K","6A430"],["D1156","SW","SW-15KS-K","6A430"],["D1156","SW","SW-15KM-K","6A430"],["D1156","SW","SW-30KM-K","6A430"],["D1156","SW","SW-60KM-K","6A430"],["D1156","SW","SW-60KL-K","6A430"],["D1156","SW","SW-150KM-K","6A430"],["D1156","SW","SW-150KL-K","6A430"],
+ ["D127","AD6209/10","AD-6209","6A780"],["D127","AD6209/10","AD-6210","6A790"],
+ ["D174","HVC","HV-15KC-K","6B130"],["D174","HVC","HV-15KCP-K","6B160"],["D174","HVC","HV-60KC-K","6B130"],["D174","HVC","HV-60KCP-K","6B160"],["D174","HVC","HV-200KC-K","6B130"],["D174","HVC","HV-200KCP-K","6B160"],
+ ["D1912","HVC-WP","HV-15KCWP-K","6B420"],["D1912","HVC-WP","HV-60KCWP-K","6B420"],["D1912","HVC-WP","HV-200KCWP-K","6B420"],
+ ["D2013","HVC-EP","HV-15KCEP-K","6B200"],["D2013","HVC-EP","HV-60KCEP-K","6B200"],["D2013","HVC-EP","HV-200KCEP-K","6B200"]
 ].map(m=>({form:m[0],cat:m[1],name:m[2],prefix:m[3]}));
 const CATS=[...new Set(MODELS.map(m=>m.cat))];
 
@@ -369,7 +369,7 @@ function renderDD(){
   });
 }
 function numClean(){return ($("numpart").value.match(/\d/g)||[]).join("");}
-function pad7(n){return String(n).padStart(7,"0");}
+function pad7(n){return String(n).padStart(4,"0");}
 function snNorm(){const p=$("prefix").value.trim().toUpperCase().replace(/\s/g,"");const n=numClean();return(p&&n)?p+pad7(n):"";}
 function snShow(){const p=$("prefix").value.trim().toUpperCase();const n=numClean();return(p&&n)?p+" "+pad7(n):"—";}
 function startReady(){return !!sel && !!snNorm();}
@@ -380,7 +380,7 @@ $("startBtn").onclick=()=>{ if(startReady()) goCapture(); };
 /* ── capture screen ── */
 function ymDisp(){const v=$("ym").value;return v?v.replace("-","."):"—";}
 function todayYmd(){const d=new Date();return ""+d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");}
-function fname(idx,total){return todayYmd()+"_"+snNorm()+"_"+(sel?sel.form:"")+"_"+(total>1?idx:1)+".jpg";}
+function fname(idx,total){const sn=snNorm()||"NA";return (total>1)?(sn+"_"+idx+".jpg"):(sn+".jpg");}
 
 function show(scr){document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on"));$(scr).classList.add("on");}
 function goCapture(){ photos=[]; capState="live"; show("scCap"); refreshCap(); startCamera(); }
