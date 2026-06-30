@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1e50d0">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>지정제조사업자 검정명판</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root{
+    --bg:#eef2f8; --panel:#ffffff; --panel2:#f1f5fb;
+    --line:#e2e8f1; --ink:#16243a; --sub:#56657e; --muted:#90a0b6;
+    --blue:#1e50d0; --blue-press:#1842b0; --blue-soft:#eaf0fe;
+    --ok:#1aa974; --warn:#f59e0b; --bad:#e2475a; --hold:#f59e0b;
+    --r:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  input,button,select,textarea{font-family:inherit;font-size:inherit}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:"Pretendard","Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    font-feature-settings:"tnum";-webkit-font-smoothing:antialiased;
+    height:100dvh;overflow:hidden;-webkit-user-select:none;user-select:none;
+  }
+  .screen{display:none;flex-direction:column;height:100dvh;
+    padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+  .screen.on{display:flex}
+  /* top bar */
+  .bar{background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;position:relative;padding:14px 16px;font-size:17px;font-weight:700;flex:0 0 auto}
+  .bar .ic{position:absolute;background:none;border:none;color:#fff;font-size:20px;width:40px;height:40px;display:flex;align-items:center;justify-content:center}
+  .bar .ic.l{left:8px} .bar .ic.r{right:8px}
+  /* generic scroll body */
+  .body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px}
+  /* ── setup screen ── */
+  .secttl{font-size:16px;font-weight:800;margin:2px 0 14px;display:flex;align-items:center;gap:8px}
+  .secttl::before{content:"";width:4px;height:16px;background:var(--blue);border-radius:2px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 1px 2px rgba(20,32,50,.04)}
+  .fld{margin-bottom:16px} .fld:last-child{margin-bottom:0}
+  .fld>label{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:7px}
+  input[type=text],input[type=search],input[type=month],input[type=number]{
+    width:100%;background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    border-radius:11px;padding:13px 14px;font-size:16px;outline:none}
+  input:focus{border-color:var(--blue)}
+  .selbox{position:relative}
+  .selbox .val{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px 14px;font-size:16px;color:var(--blue);font-weight:700;text-align:left;display:flex;justify-content:space-between;align-items:center}
+  .selbox .val.empty{color:var(--muted);font-weight:500}
+  .snrow{display:flex;gap:10px;align-items:flex-end}
+  .snrow .pre{flex:0 0 88px} .snrow .dash{padding-bottom:13px;color:var(--muted)} .snrow .num{flex:1}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:7px}
+  .seg{display:flex;gap:10px}
+  .seg .opt{flex:1;border:1.5px solid var(--line);border-radius:12px;padding:13px;display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:var(--sub);background:var(--panel)}
+  .seg .opt.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue)}
+  .seg .opt .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);flex:0 0 auto}
+  .seg .opt.on .dot{border-color:var(--blue);background:radial-gradient(circle,#fff 0 3px,var(--blue) 4px 100%)}
+  /* search dropdown list */
+  .ddlist{margin-top:8px;border:1px solid var(--line);border-radius:11px;max-height:40vh;overflow-y:auto;background:var(--panel)}
+  .ddlist .mrow{display:flex;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);font-size:15px}
+  .ddlist .mrow:last-child{border-bottom:none}
+  .ddlist .mrow.on{background:var(--blue-soft)}
+  .ddlist .mrow .nm{font-weight:600}
+  .ddlist .mrow .tag{font-size:11px;color:var(--muted);background:var(--panel2);border-radius:6px;padding:3px 7px;white-space:nowrap}
+  .ddlist .mrow .tag .pf{color:var(--blue);font-weight:700}
+  .chips{display:flex;gap:7px;overflow-x:auto;margin:8px 0 0;padding-bottom:2px}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;background:var(--panel);border:1px solid var(--line);color:var(--sub);padding:7px 12px;border-radius:999px;font-size:12.5px;white-space:nowrap}
+  .chip.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}
+  /* bottom action */
+  .botbar{flex:0 0 auto;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:var(--panel);border-top:1px solid var(--line)}
+  .bigbtn{width:100%;border:none;border-radius:15px;padding:17px;font-size:17px;font-weight:800;background:var(--blue);color:#fff}
+  .bigbtn:active{background:var(--blue-press)} .bigbtn:disabled{background:#c3cde0}
+  /* ── capture screen ── */
+  .summary{display:flex;gap:8px;padding:12px 14px 0}
+  .scard{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:9px 8px;display:flex;align-items:center;gap:8px}
+  .scard .ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto}
+  .scard.s1 .ico{background:#e7eefe;color:var(--blue)} .scard.s2 .ico{background:#fef0d8;color:var(--warn)} .scard.s3 .ico{background:#fde6e9;color:var(--bad)}
+  .scard .k{font-size:10.5px;color:var(--muted)} .scard .v{font-size:16px;font-weight:800;line-height:1.1}
+  .scard.tap{cursor:pointer}
+  .infoRow{display:flex;margin:12px 14px 0;background:var(--panel);border:1px solid var(--line);border-radius:13px;overflow:hidden}
+  .infoRow .c{flex:1;text-align:center;padding:10px 6px;border-right:1px solid var(--line)}
+  .infoRow .c:last-child{border-right:none}
+  .infoRow .c .k{font-size:11px;color:var(--muted)} .infoRow .c .v{font-size:15px;font-weight:800;color:var(--blue);margin-top:2px}
+  .snBox{margin:12px 14px 0;background:var(--blue-soft);border:1px solid #cfdcfb;border-radius:14px;padding:12px 14px;text-align:center}
+  .snBox .k{font-size:12px;color:var(--blue);font-weight:700;text-align:left}
+  .snBox .v{font-size:30px;font-weight:900;letter-spacing:1px;margin:2px 0}
+  .snBox .n{font-size:11px;color:var(--muted)}
+  .camWrap{margin:12px 14px 0;border-radius:14px;overflow:hidden;background:#0b1220;position:relative;aspect-ratio:4/3;flex:0 0 auto}
+  .camWrap video,.camWrap img{width:100%;height:100%;object-fit:cover;display:block}
+  .guide{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .guide .frame{width:84%;height:62%;border:2px dashed rgba(255,255,255,.9);border-radius:10px;position:relative;box-shadow:0 0 0 2000px rgba(0,0,0,.18)}
+  .guide .cap{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);color:#fff;font-size:13px;font-weight:700;text-shadow:0 1px 3px #000;white-space:nowrap}
+  .guide .cross{position:absolute;top:50%;left:50%;width:34px;height:34px;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%}
+  .guide .cross::before,.guide .cross::after{content:"";position:absolute;background:#fff}
+  .guide .cross::before{left:50%;top:-8px;width:2px;height:50px;transform:translateX(-50%)}
+  .guide .cross::after{top:50%;left:-8px;height:2px;width:50px;transform:translateY(-50%)}
+  .camMsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#cdd6e6;font-size:13px;text-align:center;padding:20px;flex-direction:column;gap:12px}
+  .camMsg button{background:var(--blue);color:#fff;border:none;border-radius:10px;padding:11px 18px;font-weight:700}
+  .capActions{padding:12px 14px}
+  .shootBtn{width:100%;border:none;border-radius:14px;padding:16px;font-size:17px;font-weight:800;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:9px}
+  .shootBtn:active{background:var(--blue-press)} .shootBtn:disabled{background:#c3cde0}
+  .subActions{display:flex;gap:8px}
+  .subActions button{flex:1;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 6px;font-size:13.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--sub)}
+  .subActions .hold{color:var(--warn);background:#fff8ec;border-color:#f6dca0}
+  .subActions .editsn{color:var(--blue)}
+  .recentbar{margin:0 14px;padding:11px 14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--sub)}
+  .recentbar b{color:var(--ink)} .recentbar .badge{margin-left:auto;background:#e3f6ee;color:var(--ok);font-weight:700;font-size:11px;padding:3px 9px;border-radius:999px}
+  .recentbar .tm{color:var(--muted);font-size:12px}
+  /* ── hold screen ── */
+  .holdhead{margin:14px 14px 0;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:13px 15px;display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px}
+  .holdhead .ico{width:30px;height:30px;border-radius:8px;background:#fef0d8;color:var(--warn);display:flex;align-items:center;justify-content:center}
+  .holdItem{margin:10px 14px 0;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:14px 15px;display:flex;align-items:center;gap:10px}
+  .holdItem .dot{width:9px;height:9px;border-radius:50%;background:var(--warn);flex:0 0 auto}
+  .holdItem .info{flex:1;min-width:0}
+  .holdItem .info .s{font-size:16px;font-weight:800}
+  .holdItem .info .m{font-size:12.5px;color:var(--sub);margin-top:2px}
+  .holdItem .right{text-align:right;flex:0 0 auto}
+  .holdItem .right .rs{font-size:12.5px;color:var(--ink);font-weight:600}
+  .holdItem .right .tm{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .holdItem .arr{color:var(--muted);font-size:18px;flex:0 0 auto}
+  /* sheets / modals */
+  .sheet{position:fixed;inset:0;background:rgba(20,32,50,.5);z-index:55;display:none;align-items:flex-end}
+  .sheet.on{display:flex}
+  .sheet .card2{background:var(--panel);border-radius:20px 20px 0 0;width:100%;max-height:84vh;overflow-y:auto;padding:18px 18px calc(24px + env(safe-area-inset-bottom))}
+  .sheet h3{margin:0 0 14px;font-size:17px;display:flex;justify-content:space-between;align-items:center}
+  .sheet h3 .x{background:none;border:none;color:var(--sub);font-size:24px}
+  .menuItem{display:flex;align-items:center;gap:12px;padding:15px 4px;border-bottom:1px solid var(--line);font-size:15px;font-weight:600}
+  .menuItem .mi{width:34px;height:34px;border-radius:9px;background:var(--blue-soft);color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:17px}
+  .sheet p{font-size:12.5px;color:var(--muted);line-height:1.5;margin:0 0 12px}
+  .sheet input[type=text]{margin-bottom:10px}
+  .rh{font-size:12px;color:var(--muted);margin:8px 0;letter-spacing:.3px}
+  .ritem{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);padding:8px 0;border-bottom:1px solid var(--line)}
+  .ritem b{color:var(--ink)} .ritem .st{font-size:11px;padding:2px 7px;border-radius:6px;background:var(--panel2);color:var(--sub)} .ritem .st.rep{background:#fef0d8;color:var(--warn)}
+  .confirm{position:fixed;inset:0;background:rgba(20,32,50,.55);z-index:70;display:none;align-items:center;justify-content:center;padding:24px}
+  .confirm.on{display:flex}
+  .confirm .box{background:var(--panel);border-radius:16px;padding:20px;width:100%;max-width:340px}
+  .confirm h4{margin:0 0 8px;font-size:16px} .confirm p{margin:0 0 14px;font-size:13.5px;color:var(--sub);line-height:1.5;word-break:break-all}
+  .confirm input{width:100%;margin-bottom:14px}
+  .cacts{display:flex;gap:8px} .cacts button{flex:1;border-radius:12px;padding:13px;font-weight:700;font-size:14px;border:1px solid var(--line);background:var(--panel);color:var(--sub)}
+  .cacts .pri{background:var(--blue);color:#fff;border-color:var(--blue)} .cacts .hold{background:var(--warn);color:#fff;border-color:var(--warn)}
+  .toast{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);background:var(--ok);color:#fff;font-weight:700;padding:12px 20px;border-radius:999px;font-size:14px;z-index:80;box-shadow:0 8px 24px rgba(20,32,50,.25);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;max-width:88%;text-align:center}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)} .toast.err{background:var(--bad)} .toast.hold{background:var(--warn)}
+  .empty-note{color:var(--muted);font-size:13px;text-align:center;padding:20px}
+  canvas{display:none}
+</style>
+</head>
+<body>
+
+<!-- ══ SCREEN 1: SETUP ══ -->
+<div class="screen on" id="scSetup">
+  <div class="bar">지정제조사업자 검정명판
+    <button class="ic r" id="setupGear">⚙</button>
+  </div>
+  <div class="body">
+    <div class="secttl">작업 시작 설정</div>
+    <div class="card">
+      <div class="fld">
+        <label>기종 선택</label>
+        <input type="search" id="search" placeholder="기종명 또는 형식번호 검색">
+        <div class="chips" id="chips"></div>
+        <div class="ddlist" id="ddlist"></div>
+      </div>
+      <div class="fld">
+        <label>제조년월</label>
+        <input type="month" id="ym">
+      </div>
+      <div class="fld">
+        <label>SN 시작번호</label>
+        <div class="snrow">
+          <div class="pre"><input type="text" id="prefix" placeholder="6B" autocomplete="off"></div>
+          <div class="dash">–</div>
+          <div class="num"><input type="text" id="numpart" inputmode="numeric" placeholder="1601298" autocomplete="off"></div>
+        </div>
+        <div class="hint">저장 시 공백 없이 저장됩니다. (예: 6B1601298)</div>
+      </div>
+      <div class="fld">
+        <label>사진 장수</label>
+        <div class="seg">
+          <button class="opt on" id="opt1"><span class="dot"></span>기본 1장</button>
+          <button class="opt" id="opt2"><span class="dot"></span>필요 시 2장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="botbar">
+    <button class="bigbtn" id="startBtn" disabled>작업 시작</button>
+  </div>
+</div>
+
+<!-- ══ SCREEN 2: CAPTURE ══ -->
+<div class="screen" id="scCap">
+  <div class="bar">
+    <button class="ic l" id="capMenu">☰</button>
+    지정제조사업자 검정명판
+  </div>
+  <div class="body" style="padding:0 0 12px">
+    <div class="summary">
+      <div class="scard s1"><div class="ico">📊</div><div><div class="k">오늘</div><div class="v"><span id="sumShot">0</span>건</div></div></div>
+      <div class="scard s2 tap" id="holdCardTap"><div class="ico">⏱</div><div><div class="k">보류</div><div class="v" id="sumHold">0</div></div></div>
+      <div class="scard s3"><div class="ico">❗</div><div><div class="k">실패</div><div class="v" id="sumFail">0</div></div></div>
+    </div>
+    <div class="infoRow">
+      <div class="c"><div class="k">형식번호</div><div class="v" id="capForm">—</div></div>
+      <div class="c"><div class="k">기종명</div><div class="v" id="capModel">—</div></div>
+      <div class="c"><div class="k">제조년월</div><div class="v" id="capYm">—</div></div>
+    </div>
+    <div class="snBox">
+      <div class="k">현재 SN <span id="repairTag" style="color:var(--warn)"></span></div>
+      <div class="v" id="capSn">—</div>
+      <div class="n">저장 시 공백 없이 저장됩니다 · <span id="capFname">—</span></div>
+    </div>
+    <div class="camWrap" id="camWrap">
+      <video id="video" playsinline autoplay muted></video>
+      <img id="freeze" style="display:none">
+      <div class="guide" id="guide">
+        <div class="frame"><div class="cross"></div><div class="cap">명판을 이 영역에 맞춰주세요</div></div>
+      </div>
+      <div class="camMsg" id="camMsg" style="display:none"></div>
+    </div>
+    <div class="capActions">
+      <button class="shootBtn" id="shootBtn"><span>📷</span><span id="shootTxt">촬영 / 저장</span></button>
+      <div class="subActions">
+        <button id="retakeBtn">↻ 재촬영</button>
+        <button class="hold" id="holdBtn">⏱ 보류</button>
+        <button class="editsn" id="editSnBtn">✎ SN 수정</button>
+      </div>
+    </div>
+    <div class="recentbar" id="recentBar" style="display:none">
+      최근 저장: <b id="recentSn">—</b>
+      <span class="badge" id="recentState">저장완료</span>
+      <span class="tm" id="recentTm"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 3: HOLD ══ -->
+<div class="screen" id="scHold">
+  <div class="bar">
+    <button class="ic l" id="holdBack">‹</button>
+    보류함
+  </div>
+  <div class="body" style="padding:0 0 12px">
+    <div class="holdhead"><div class="ico">⏱</div><span id="holdCount">0건 보류 중</span></div>
+    <div id="holdList"></div>
+  </div>
+  <div class="botbar">
+    <button class="bigbtn" id="holdShootBtn" disabled>선택 후 촬영</button>
+  </div>
+</div>
+
+<!-- menu sheet -->
+<div class="sheet" id="menuSheet">
+  <div class="card2">
+    <h3>메뉴 <button class="x" data-close="menuSheet">×</button></h3>
+    <div class="menuItem" id="menuHold"><div class="mi">⏱</div>보류함 보기</div>
+    <div class="menuItem" id="menuSetting"><div class="mi">⚙</div>저장 연결 설정</div>
+    <div class="menuItem" id="menuReset"><div class="mi">↺</div>작업 설정 변경(처음 화면)</div>
+  </div>
+</div>
+
+<!-- settings sheet -->
+<div class="sheet" id="setSheet">
+  <div class="card2">
+    <h3>저장 연결 설정 <button class="x" data-close="setSheet">×</button></h3>
+    <p>Google Apps Script 웹앱 URL을 넣으면 Drive에 사진, Sheets에 기록이 저장돼요. 비워두면 데모 모드(저장 안 됨)입니다.</p>
+    <input type="text" id="endpoint" placeholder="https://script.google.com/macros/s/.../exec">
+    <input type="text" id="worker" placeholder="작업자 이름 (선택)">
+    <div class="rh">이번 세션 최근 기록</div>
+    <div id="recentList"><div class="empty-note">아직 없음</div></div>
+    <button class="bigbtn" id="setSave" style="margin-top:12px">저장</button>
+  </div>
+</div>
+
+<!-- SN edit -->
+<div class="confirm" id="snEdit">
+  <div class="box">
+    <h4>SN 수정</h4>
+    <p>현재 번호를 직접 바꿉니다. (접두어 / 숫자부)</p>
+    <div style="display:flex;gap:10px">
+      <input type="text" id="editPre" style="flex:0 0 90px" autocomplete="off">
+      <input type="text" id="editNum" inputmode="numeric" style="flex:1" autocomplete="off">
+    </div>
+    <div class="cacts" style="margin-top:14px"><button data-close="snEdit">취소</button><button class="pri" id="snEditOk">적용</button></div>
+  </div>
+</div>
+
+<!-- hold confirm -->
+<div class="confirm" id="holdConfirm">
+  <div class="box">
+    <h4>보류 등록</h4>
+    <p id="holdConfirmSn"></p>
+    <input type="text" id="holdReason" placeholder="보류 사유 (예: 명판 재각인)" autocomplete="off">
+    <div class="cacts"><button data-close="holdConfirm">취소</button><button class="hold" id="holdOk">보류</button></div>
+  </div>
+</div>
+
+<!-- dup confirm -->
+<div class="confirm" id="dupConfirm">
+  <div class="box">
+    <h4>이미 촬영된 SN</h4>
+    <p id="dupMsg"></p>
+    <div class="cacts"><button data-close="dupConfirm">취소</button><button class="pri" id="dupOk">그래도 저장</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<canvas id="cv"></canvas>
+
+<script>
+/* ── 모델 (77, 단종 제외) ── */
+const MODELS=[
+ ["D054","EK","EK-610i-K","Q9"],["D054","EK","EK-6100i-K","Q9"],
+ ["D054-1","EW","EW-600i-K","6A"],["D054-1","EW","EW-1500i-K","P2"],["D054-1","EW","EW-12Ki-K","P6"],
+ ["D055","FG","FG-30KAM-K","Q1"],["D055","FG","FG-30KBM-K","Q1"],["D055","FG","FG-60KAM-K","Q1"],["D055","FG","FG-60KBM-K","Q1"],["D055","FG","FG-60KAL-K","Q1"],["D055","FG","FG-150KAM-K","Q1"],["D055","FG","FG-150KBM-K","Q1"],["D055","FG","FG-150KAL-K","Q1"],
+ ["D055","AD6207/08","AD-6207A","Q5"],["D055","AD6207/08","AD-6207B","Q5"],
+ ["D075-1","SQ/SR","SQ-6K","5A"],["D075-1","SQ/SR","SQ-15K","5A"],["D075-1","SQ/SR","SQ-30K","5A"],["D075-1","SQ/SR","SR-6K","5A"],["D075-1","SQ/SR","SR-15K","5A"],["D075-1","SQ/SR","SR-30K","5A"],
+ ["D0920","HL-IWP","HL-1000iWP-K","6A"],["D0920","HL-IWP","HL-2000iWP-K","6A"],
+ ["D0920","SK-IWP","SK-1000iWP","6A"],["D0920","SK-IWP","SK-2000iWP","6A"],["D0920","SK-IWP","SK-5000iWP","6A"],["D0920","SK-IWP","SK-10KiWP","6A"],["D0920","SK-IWP","SK-20KiWP","6A"],
+ ["D1013","SK-I","SK-1000i","6B"],["D1013","SK-I","SK-2000i","6B"],["D1013","SK-I","SK-5000i","6B"],["D1013","SK-I","SK-10Ki","6B"],["D1013","SK-I","SK-20Ki","6B"],["D1013","SK-I","SK-30Ki","6B"],["D1013","SK-I","SK-30KiWP","6A"],
+ ["D1146","SC/SE","SC-30KAM-K","6A"],["D1146","SC/SE","SC-30KBM-K","6A"],["D1146","SC/SE","SE-30KAM-K","6A"],["D1146","SC/SE","SE-30KBM-K","6A"],["D1146","SC/SE","SC-60KAM-K","6A"],["D1146","SC/SE","SC-60KAL-K","6A"],["D1146","SC/SE","SC-60KBM-K","6A"],["D1146","SC/SE","SC-60KBL-K","6A"],["D1146","SC/SE","SE-60KAM-K","6A"],["D1146","SC/SE","SE-60KAL-K","6A"],["D1146","SC/SE","SE-60KBM-K","6A"],["D1146","SC/SE","SE-60KBL-K","6A"],["D1146","SC/SE","SC-150KAM-K","6A"],["D1146","SC/SE","SC-150KAL-K","6A"],["D1146","SC/SE","SC-150KBM-K","6A"],["D1146","SC/SE","SC-150KBL-K","6A"],["D1146","SC/SE","SE-150KAM-K","6A"],["D1146","SC/SE","SE-150KAL-K","6A"],["D1146","SC/SE","SE-150KBM-K","6A"],["D1146","SC/SE","SE-150KBL-K","6A"],
+ ["D1156","SW","SW-6KS-K","6A"],["D1156","SW","SW-15KS-K","6A"],["D1156","SW","SW-15KM-K","6A"],["D1156","SW","SW-30KM-K","6A"],["D1156","SW","SW-60KM-K","6A"],["D1156","SW","SW-60KL-K","6A"],["D1156","SW","SW-150KM-K","6A"],["D1156","SW","SW-150KL-K","6A"],
+ ["D127","AD6209/10","AD-6209","6A"],["D127","AD6209/10","AD-6210","6A"],
+ ["D174","HVC","HV-15KC-K","6B"],["D174","HVC","HV-15KCP-K","6B"],["D174","HVC","HV-60KC-K","6B"],["D174","HVC","HV-60KCP-K","6B"],["D174","HVC","HV-200KC-K","6B"],["D174","HVC","HV-200KCP-K","6B"],
+ ["D1912","HVC-WP","HV-15KCWP-K","6B"],["D1912","HVC-WP","HV-60KCWP-K","6B"],["D1912","HVC-WP","HV-200KCWP-K","6B"],
+ ["D2013","HVC-EP","HV-15KCEP-K","6B"],["D2013","HVC-EP","HV-60KCEP-K","6B"],["D2013","HVC-EP","HV-200KCEP-K","6B"]
+].map(m=>({form:m[0],cat:m[1],name:m[2],prefix:m[3]}));
+const CATS=[...new Set(MODELS.map(m=>m.cat))];
+
+const $=id=>document.getElementById(id);
+let sel=null, activeCat=null, photoMode=1;
+let photos=[], capturing=false;
+let endpoint="", worker="";
+let shot=0, fail=0;
+let recent=[], holds=[], savedKeys=new Set();
+let repairTarget=null, resumeNum=null, pendingDup=false;
+let stream=null;
+
+/* init */
+(function(){
+  const d=new Date(); $("ym").value=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+  renderChips(); renderDD(); refreshStart();
+})();
+
+/* ── setup logic ── */
+$("search").addEventListener("input",renderDD);
+$("prefix").addEventListener("input",refreshStart);
+$("numpart").addEventListener("input",refreshStart);
+$("ym").addEventListener("change",refreshStart);
+$("opt1").onclick=()=>{photoMode=1;$("opt1").classList.add("on");$("opt2").classList.remove("on");};
+$("opt2").onclick=()=>{photoMode=2;$("opt2").classList.add("on");$("opt1").classList.remove("on");};
+
+function renderChips(){
+  const el=$("chips"); el.innerHTML="";
+  const all=document.createElement("button");all.className="chip"+(activeCat===null?" on":"");all.textContent="전체";all.onclick=()=>{activeCat=null;renderChips();renderDD();};el.appendChild(all);
+  CATS.forEach(c=>{const b=document.createElement("button");b.className="chip"+(activeCat===c?" on":"");b.textContent=c;b.onclick=()=>{activeCat=activeCat===c?null:c;renderChips();renderDD();};el.appendChild(b);});
+}
+function renderDD(){
+  const q=$("search").value.trim().toUpperCase();
+  let list=MODELS.filter(m=>{
+    if(activeCat&&m.cat!==activeCat)return false;
+    if(q&&!(m.name.toUpperCase().includes(q)||m.form.toUpperCase().includes(q)||m.cat.toUpperCase().includes(q)||m.prefix.includes(q)))return false;
+    return true;
+  });
+  const el=$("ddlist"); el.innerHTML="";
+  if(!list.length){el.innerHTML='<div class="empty-note">검색 결과 없음</div>';return;}
+  list.slice(0,60).forEach(m=>{
+    const r=document.createElement("div");r.className="mrow"+(sel&&sel.name===m.name?" on":"");
+    r.innerHTML=`<span class="nm">${m.name}</span><span class="tag"><span class="pf">${m.prefix}</span> · ${m.form}</span>`;
+    r.onclick=()=>{ sel=m; $("prefix").value=m.prefix; $("search").value=m.name; renderDD(); refreshStart(); };
+    el.appendChild(r);
+  });
+}
+function numClean(){return ($("numpart").value.match(/\d/g)||[]).join("");}
+function pad7(n){return String(n).padStart(7,"0");}
+function snNorm(){const p=$("prefix").value.trim().toUpperCase().replace(/\s/g,"");const n=numClean();return(p&&n)?p+pad7(n):"";}
+function snShow(){const p=$("prefix").value.trim().toUpperCase();const n=numClean();return(p&&n)?p+" "+pad7(n):"—";}
+function startReady(){return !!sel && !!snNorm();}
+function refreshStart(){ $("startBtn").disabled=!startReady(); }
+
+$("startBtn").onclick=()=>{ if(startReady()) goCapture(); };
+
+/* ── capture screen ── */
+function ymDisp(){const v=$("ym").value;return v?v.replace("-","."):"—";}
+function todayYmd(){const d=new Date();return ""+d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");}
+function fname(idx,total){return todayYmd()+"_"+snNorm()+"_"+(sel?sel.form:"")+"_"+(total>1?idx:1)+".jpg";}
+
+function show(scr){document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on"));$(scr).classList.add("on");}
+function goCapture(){ photos=[]; capState="live"; show("scCap"); refreshCap(); startCamera(); }
+
+function refreshCap(){
+  $("capForm").textContent=sel?sel.form:"—";
+  $("capModel").textContent=sel?sel.name:"—";
+  $("capYm").textContent=ymDisp();
+  $("capSn").textContent=snShow();
+  $("capFname").textContent=startReady()?fname(1,1):"—";
+  $("sumShot").textContent=shot; $("sumHold").textContent=holds.length; $("sumFail").textContent=fail;
+  $("repairTag").textContent=repairTarget?"· 수리품 촬영 중":"";
+  if(typeof updateMainBtn==="function") updateMainBtn();
+}
+
+/* camera */
+async function startCamera(){
+  $("camMsg").style.display="none"; $("video").style.display="block"; $("freeze").style.display="none"; $("guide").style.display="flex";
+  if(stream) return;
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1440}},audio:false});
+    $("video").srcObject=stream;
+  }catch(e){
+    showCamFallback("카메라를 시작할 수 없어요.\n(HTTPS·카메라 권한 필요)");
+  }
+}
+function stopCamera(){ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} }
+function showCamFallback(msg){
+  $("video").style.display="none"; $("guide").style.display="none";
+  const m=$("camMsg"); m.style.display="flex";
+  m.innerHTML=`<div>${msg.replace(/\n/g,"<br>")}</div>`;
+  const b=document.createElement("button");b.textContent="사진 파일로 촬영";
+  b.onclick=()=>{ let inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.capture="environment";
+    inp.onchange=e=>{const f=e.target.files[0];if(f)compressFile(f).then(pushPhoto);};inp.click(); };
+  m.appendChild(b);
+}
+
+/* ── shoot/save flow (state machine) ── */
+let capState="live"; // live | shot1(2장모드 1장후) | shotDone
+function showLive(){ $("video").style.display="block"; $("freeze").style.display="none"; $("guide").style.display="flex"; }
+function showFreeze(d){ $("video").style.display="none"; $("guide").style.display="none"; $("freeze").src=d; $("freeze").style.display="block"; }
+function updateMainBtn(){
+  let t = capState==="live" ? (repairTarget?"수리품 촬영":"촬영 / 저장")
+        : capState==="shot1" ? "＋ 한 장 더 촬영"
+        : "저장 ("+photos.length+"장)";
+  $("shootTxt").textContent=t;
+}
+$("shootBtn").onclick=onMainBtn;
+function onMainBtn(){
+  if(!startReady())return;
+  if(capState==="live") doShoot();
+  else if(capState==="shot1"){ capState="live"; showLive(); updateMainBtn(); } // 한 장 더
+  else saveFlow();
+}
+function doShoot(){
+  if(stream){
+    const v=$("video"),cv=$("cv"),mw=1280,s=Math.min(1,mw/v.videoWidth),w=Math.round(v.videoWidth*s),h=Math.round(v.videoHeight*s);
+    cv.width=w;cv.height=h;cv.getContext("2d").drawImage(v,0,0,w,h);
+    pushPhoto(cv.toDataURL("image/jpeg",0.7));
+  }else{
+    let inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.capture="environment";
+    inp.onchange=e=>{const f=e.target.files[0];if(f)compressFile(f).then(pushPhoto);};inp.click();
+  }
+}
+function pushPhoto(d){
+  photos.push(d); showFreeze(d);
+  if(photoMode===2 && photos.length===1){ capState="shot1"; toast("1장 촬영됨 · 한 장 더 또는 저장"); }
+  else capState="shotDone";
+  updateMainBtn();
+}
+function compressFile(file){return new Promise(res=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{const s=Math.min(1,1280/img.width),w=Math.round(img.width*s),h=Math.round(img.height*s),c=$("cv");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.7));};img.src=url;});}
+
+function retake(){ photos=[]; capState="live"; showLive(); updateMainBtn(); }
+$("retakeBtn").onclick=retake;
+
+function saveFlow(){
+  const key=todayYmd()+"|"+snNorm();
+  if(savedKeys.has(key)&&!repairTarget){
+    $("dupMsg").textContent="오늘 이미 "+snShow()+" 사진이 저장되어 있어요. 그래도 저장할까요?";
+    $("dupConfirm").classList.add("on"); return;
+  }
+  doSave();
+}
+$("dupOk").onclick=()=>{ $("dupConfirm").classList.remove("on"); doSave(); };
+
+async function doSave(){
+  const rec={ ts:new Date().toISOString(), workDate:todayYmd(), form:sel.form, cat:sel.cat, model:sel.name,
+    ym:$("ym").value, snShow:snShow(), snNorm:snNorm(), prefix:$("prefix").value.trim().toUpperCase(), num:pad7(numClean()),
+    photoCount:photos.length, worker, state:repairTarget?"수리완료촬영":"정상촬영",
+    uuid:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()) };
+  let ok=true;
+  if(endpoint){
+    try{ const fd=new FormData(); fd.append("payload",JSON.stringify(rec)); photos.forEach((p,i)=>fd.append("photo"+(i+1),p));
+      const r=await fetch(endpoint,{method:"POST",body:fd}); ok=r.ok;
+    }catch(e){ ok=false; }
+  }
+  if(!ok){ fail++; retake(); refreshCap(); toast("저장 실패 — 미전송 보관",true); return; }
+
+  shot++; savedKeys.add(rec.workDate+"|"+rec.snNorm); recent.unshift(rec); if(recent.length>30)recent.pop();
+  showRecent(rec);
+
+  if(repairTarget){
+    holds=holds.filter(h=>h.snNorm!==repairTarget.snNorm);
+    if(resumeNum!=null) $("numpart").value=resumeNum;
+    repairTarget=null; resumeNum=null;
+    retake(); refreshCap(); renderRecentList();
+    toast(endpoint?"수리품 저장 완료":"수리품 기록됨(데모)");
+  }else{
+    $("numpart").value=pad7(parseInt(numClean()||"0",10)+1);
+    retake(); refreshCap(); renderRecentList();
+    toast((endpoint?"저장 완료":"기록됨(데모)")+" · 다음 "+snShow());
+  }
+}
+
+function showRecent(rec){
+  $("recentBar").style.display="flex";
+  $("recentSn").textContent=rec.snNorm;
+  $("recentState").textContent=rec.state==="수리완료촬영"?"수리완료":"저장완료";
+  const d=new Date(rec.ts);$("recentTm").textContent=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0");
+}
+
+/* SN edit */
+$("editSnBtn").onclick=()=>{ $("editPre").value=$("prefix").value; $("editNum").value=numClean(); $("snEdit").classList.add("on"); };
+$("snEditOk").onclick=()=>{ $("prefix").value=$("editPre").value.trim().toUpperCase(); $("numpart").value=($("editNum").value.match(/\d/g)||[]).join(""); $("snEdit").classList.remove("on"); refreshCap(); };
+
+/* hold */
+$("holdBtn").onclick=()=>{ if(!startReady()||repairTarget)return;
+  $("holdConfirmSn").textContent=sel.name+" · "+snShow()+" 을(를) 보류함에 넣을까요? 번호는 다음으로 넘어갑니다.";
+  $("holdReason").value=""; $("holdConfirm").classList.add("on"); };
+$("holdOk").onclick=()=>{
+  holds.unshift({ ts:new Date().toISOString(), form:sel.form, cat:sel.cat, model:sel.name, ym:$("ym").value,
+    snShow:snShow(), snNorm:snNorm(), prefix:$("prefix").value.trim().toUpperCase(), num:pad7(numClean()),
+    reason:$("holdReason").value.trim()||"-", state:"보류" });
+  $("numpart").value=pad7(parseInt(numClean()||"0",10)+1);
+  $("holdConfirm").classList.remove("on"); refreshCap();
+  const t=$("toast");toast("보류 등록 · 다음 "+snShow());t.classList.add("hold");
+};
+
+/* hold screen */
+function openHold(){ stopCamera(); show("scHold"); renderHoldList(); }
+$("holdCardTap").onclick=openHold;
+$("holdBack").onclick=()=>{ show("scCap"); startCamera(); };
+let holdSelected=null;
+function renderHoldList(){
+  $("holdCount").textContent=holds.length+"건 보류 중";
+  const el=$("holdList"); el.innerHTML=""; holdSelected=null; $("holdShootBtn").disabled=true;
+  if(!holds.length){el.innerHTML='<div class="empty-note">보류 항목 없음</div>';return;}
+  holds.forEach((h,idx)=>{
+    const d=new Date(h.ts),tm=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    const r=document.createElement("div");r.className="holdItem";
+    r.innerHTML=`<span class="dot"></span><div class="info"><div class="s">${h.snNorm}</div><div class="m">${h.form} / ${h.model}</div></div><div class="right"><div class="rs">${h.reason}</div><div class="tm">${tm}</div></div><span class="arr">›</span>`;
+    r.onclick=()=>{ holdSelected=h; document.querySelectorAll(".holdItem").forEach(x=>x.style.background="");r.style.background="var(--blue-soft)";$("holdShootBtn").disabled=false; };
+    el.appendChild(r);
+  });
+}
+$("holdShootBtn").onclick=()=>{ if(holdSelected) startRepair(holdSelected); };
+function startRepair(h){
+  resumeNum=$("numpart").value; repairTarget=h;
+  sel=MODELS.find(m=>m.name===h.model)||sel;
+  $("prefix").value=h.prefix; $("numpart").value=h.num; $("ym").value=h.ym;
+  photos=[]; capState="live";
+  show("scCap"); refreshCap(); startCamera();
+  const t=$("toast");toast("수리품 모드: "+h.snNorm);t.classList.add("hold");
+}
+
+/* menu / settings */
+$("capMenu").onclick=()=>$("menuSheet").classList.add("on");
+$("setupGear").onclick=()=>{ $("endpoint").value=endpoint;$("worker").value=worker;renderRecentList();$("setSheet").classList.add("on"); };
+$("menuHold").onclick=()=>{ $("menuSheet").classList.remove("on"); openHold(); };
+$("menuSetting").onclick=()=>{ $("menuSheet").classList.remove("on"); $("endpoint").value=endpoint;$("worker").value=worker;renderRecentList();$("setSheet").classList.add("on"); };
+$("menuReset").onclick=()=>{ $("menuSheet").classList.remove("on"); stopCamera(); show("scSetup"); };
+$("setSave").onclick=()=>{ endpoint=$("endpoint").value.trim();worker=$("worker").value.trim();$("setSheet").classList.remove("on");toast(endpoint?"저장 연결됨":"데모 모드"); };
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>$(b.dataset.close).classList.remove("on"));
+document.querySelectorAll(".confirm,.sheet").forEach(s=>s.addEventListener("click",e=>{if(e.target===s)s.classList.remove("on");}));
+
+function renderRecentList(){
+  const el=$("recentList"); if(!recent.length){el.innerHTML='<div class="empty-note">아직 없음</div>';return;}
+  el.innerHTML=""; recent.slice(0,10).forEach(r=>{
+    const d=new Date(r.ts),tm=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    const rep=r.state==="수리완료촬영";
+    const row=document.createElement("div");row.className="ritem";
+    row.innerHTML=`<span><b>${r.snNorm}</b> · ${r.model} <span class="st${rep?" rep":""}">${r.state}</span></span><span>${r.photoCount}장 ${tm}</span>`;
+    el.appendChild(row);
+  });
+}
+
+/* toast */
+let tT;function toast(msg,err){const t=$("toast");t.textContent=msg;t.className="toast show"+(err?" err":"");clearTimeout(tT);tT=setTimeout(()=>t.className="toast",1700);}
+</script>
+</body>
+</html>
