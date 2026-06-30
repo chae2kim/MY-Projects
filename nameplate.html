@@ -77,6 +77,7 @@
   .scard{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:9px 8px;display:flex;align-items:center;gap:8px}
   .scard .ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto}
   .scard.s1 .ico{background:#e7eefe;color:var(--blue)} .scard.s2 .ico{background:#fef0d8;color:var(--warn)} .scard.s3 .ico{background:#fde6e9;color:var(--bad)}
+  #pendCard.alert{background:#fde6e9;border-color:#f3b6bf} #pendCard.alert .v{color:var(--bad)}
   .scard .k{font-size:10.5px;color:var(--muted)} .scard .v{font-size:16px;font-weight:800;line-height:1.1}
   .scard.tap{cursor:pointer}
   .infoRow{display:flex;margin:12px 14px 0;background:var(--panel);border:1px solid var(--line);border-radius:13px;overflow:hidden}
@@ -195,7 +196,7 @@
     <div class="summary">
       <div class="scard s1"><div class="ico">📊</div><div><div class="k">오늘</div><div class="v"><span id="sumShot">0</span>건</div></div></div>
       <div class="scard s2 tap" id="holdCardTap"><div class="ico">⏱</div><div><div class="k">보류</div><div class="v" id="sumHold">0</div></div></div>
-      <div class="scard s3"><div class="ico">❗</div><div><div class="k">실패</div><div class="v" id="sumFail">0</div></div></div>
+      <div class="scard s3" id="pendCard"><div class="ico">❗</div><div><div class="k">미전송</div><div class="v" id="sumFail">0</div></div></div>
     </div>
     <div class="infoRow">
       <div class="c"><div class="k">형식번호</div><div class="v" id="capForm">—</div></div>
@@ -328,7 +329,7 @@ const $=id=>document.getElementById(id);
 let sel=null, activeCat=null, photoMode=1;
 let photos=[], capturing=false;
 let endpoint="https://script.google.com/macros/s/AKfycbyjs47ayp6YQp94p0q06vPIjok-LmBGI5_IhKQWeG4H-N2GJ7SP0E2oDF_agdGeqYTp/exec", worker="";
-let shot=0, fail=0;
+let shot=0, pendingCount=0;
 let recent=[], holds=[], savedKeys=new Set();
 let repairTarget=null, resumeNum=null, pendingDup=false;
 let stream=null;
@@ -337,6 +338,7 @@ let stream=null;
 (function(){
   const d=new Date(); $("ym").value=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
   renderChips(); renderDD(); refreshStart();
+  if(window.indexedDB){ updatePending(); flushOutbox(); }
 })();
 
 /* ── setup logic ── */
@@ -391,7 +393,8 @@ function refreshCap(){
   $("capYm").textContent=ymDisp();
   $("capSn").textContent=snShow();
   $("capFname").textContent=startReady()?fname(1,1):"—";
-  $("sumShot").textContent=shot; $("sumHold").textContent=holds.length; $("sumFail").textContent=fail;
+  $("sumShot").textContent=shot; $("sumHold").textContent=holds.length; $("sumFail").textContent=pendingCount;
+  $("pendCard").classList.toggle("alert", pendingCount>0);
   $("repairTag").textContent=repairTarget?"· 수리품 촬영 중":"";
   if(typeof updateMainBtn==="function") updateMainBtn();
 }
@@ -475,7 +478,16 @@ function saveFlow(){
 }
 $("dupOk").onclick=()=>{ $("dupConfirm").classList.remove("on"); doSave(); };
 
-let outbox=[]; // 미전송 {rec, photos}
+/* ── IndexedDB 영구 미전송 큐 (누락 방지) ── */
+let _db=null;
+function db(){return new Promise((res,rej)=>{ if(_db)return res(_db);
+  const r=indexedDB.open("nameplateDB",1);
+  r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains("outbox")) r.result.createObjectStore("outbox",{keyPath:"uuid"}); };
+  r.onsuccess=()=>{_db=r.result;res(_db);}; r.onerror=()=>rej(r.error); });}
+function idbPut(item){return db().then(d=>new Promise((res,rej)=>{const t=d.transaction("outbox","readwrite");t.objectStore("outbox").put(item);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);})).catch(()=>{});}
+function idbDelete(uuid){return db().then(d=>new Promise(res=>{const t=d.transaction("outbox","readwrite");t.objectStore("outbox").delete(uuid);t.oncomplete=()=>res();t.onerror=()=>res();})).catch(()=>{});}
+function idbAll(){return db().then(d=>new Promise(res=>{const t=d.transaction("outbox","readonly");const rq=t.objectStore("outbox").getAll();rq.onsuccess=()=>res(rq.result||[]);rq.onerror=()=>res([]);})).catch(()=>[]);}
+function updatePending(){ return idbAll().then(a=>{ pendingCount=a.length; $("sumFail").textContent=pendingCount; $("pendCard").classList.toggle("alert",pendingCount>0); }); }
 
 function doSave(){
   const rec={ ts:new Date().toISOString(), workDate:todayYmd(), form:sel.form, cat:sel.cat, model:sel.name,
@@ -484,10 +496,12 @@ function doSave(){
     uuid:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()) };
   const photosCopy=photos.slice();
 
-  // 즉시 UI 진행 (서버 응답 기다리지 않음)
+  // 1) 폰에 영구 보관 먼저 (앱 꺼져도/끊겨도 안 사라짐)
+  if(endpoint){ idbPut({uuid:rec.uuid, rec:rec, photos:photosCopy, ts:Date.now()}).then(updatePending); }
+
+  // 2) UI 즉시 진행 (서버 응답 안 기다림)
   shot++; savedKeys.add(rec.workDate+"|"+rec.snNorm); recent.unshift(rec); if(recent.length>30)recent.pop();
   showRecent(rec);
-
   if(repairTarget){
     holds=holds.filter(h=>h.snNorm!==repairTarget.snNorm);
     if(resumeNum!=null) $("numpart").value=resumeNum;
@@ -500,30 +514,34 @@ function doSave(){
     toast((endpoint?"저장":"기록(데모)")+" · 다음 "+snShow());
   }
 
-  // 백그라운드 전송
-  trySend(rec, photosCopy);
+  // 3) 백그라운드 전송 시도 (성공하면 폰에서 제거)
+  if(endpoint) flushOutbox();
 }
 
-function trySend(rec, photoArr){
-  if(!endpoint) return; // 데모 모드
-  const fd=new FormData(); fd.append("payload",JSON.stringify(rec));
-  photoArr.forEach((p,i)=>fd.append("photo"+(i+1),p));
-  fetch(endpoint,{method:"POST",body:fd})
-    .then(r=>{ if(!r.ok) throw new Error("bad"); })
-    .catch(()=>{ outbox.push({rec:rec,photos:photoArr}); fail++; refreshCap(); toast("전송 실패 — 미전송 보관("+outbox.length+")",true); });
+// 미전송분 전송 (시작 시 + 주기적 + 저장 직후)
+let flushing=false;
+async function flushOutbox(){
+  if(!endpoint||flushing) return;
+  flushing=true;
+  try{
+    const all=await idbAll();
+    for(const item of all){
+      try{
+        const fd=new FormData(); fd.append("payload",JSON.stringify(item.rec));
+        item.photos.forEach((p,i)=>fd.append("photo"+(i+1),p));
+        const r=await fetch(endpoint,{method:"POST",body:fd});
+        if(r.ok){ await idbDelete(item.uuid); }
+        else break; // 서버 오류 → 다음 기회에
+      }catch(e){ break; } // 네트워크 끊김 → 다음 기회에
+    }
+  } finally { flushing=false; await updatePending(); }
 }
+setInterval(flushOutbox, 8000);
 
-// 미전송분 주기적 자동 재전송
-function flushOutbox(){
-  if(!endpoint||!outbox.length) return;
-  const item=outbox.shift();
-  const fd=new FormData(); fd.append("payload",JSON.stringify(item.rec));
-  item.photos.forEach((p,i)=>fd.append("photo"+(i+1),p));
-  fetch(endpoint,{method:"POST",body:fd})
-    .then(r=>{ if(!r.ok) throw new Error("bad"); fail=Math.max(0,fail-1); refreshCap(); })
-    .catch(()=>{ outbox.unshift(item); });
-}
-setInterval(flushOutbox, 12000);
+// 닫기 경고 (미전송 남아있으면)
+window.addEventListener("beforeunload", function(e){
+  if(pendingCount>0){ e.preventDefault(); e.returnValue=""; return ""; }
+});
 
 function showRecent(rec){
   $("recentBar").style.display="flex";
