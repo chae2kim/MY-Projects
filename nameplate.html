@@ -466,19 +466,16 @@ function saveFlow(){
 }
 $("dupOk").onclick=()=>{ $("dupConfirm").classList.remove("on"); doSave(); };
 
-async function doSave(){
+let outbox=[]; // 미전송 {rec, photos}
+
+function doSave(){
   const rec={ ts:new Date().toISOString(), workDate:todayYmd(), form:sel.form, cat:sel.cat, model:sel.name,
     ym:$("ym").value, snShow:snShow(), snNorm:snNorm(), prefix:$("prefix").value.trim().toUpperCase(), num:pad7(numClean()),
     photoCount:photos.length, worker, state:repairTarget?"수리완료촬영":"정상촬영",
     uuid:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()) };
-  let ok=true;
-  if(endpoint){
-    try{ const fd=new FormData(); fd.append("payload",JSON.stringify(rec)); photos.forEach((p,i)=>fd.append("photo"+(i+1),p));
-      const r=await fetch(endpoint,{method:"POST",body:fd}); ok=r.ok;
-    }catch(e){ ok=false; }
-  }
-  if(!ok){ fail++; retake(); refreshCap(); toast("저장 실패 — 미전송 보관",true); return; }
+  const photosCopy=photos.slice();
 
+  // 즉시 UI 진행 (서버 응답 기다리지 않음)
   shot++; savedKeys.add(rec.workDate+"|"+rec.snNorm); recent.unshift(rec); if(recent.length>30)recent.pop();
   showRecent(rec);
 
@@ -487,13 +484,37 @@ async function doSave(){
     if(resumeNum!=null) $("numpart").value=resumeNum;
     repairTarget=null; resumeNum=null;
     retake(); refreshCap(); renderRecentList();
-    toast(endpoint?"수리품 저장 완료":"수리품 기록됨(데모)");
+    toast(endpoint?"수리품 저장 · 다음":"수리품 기록(데모)");
   }else{
     $("numpart").value=pad7(parseInt(numClean()||"0",10)+1);
     retake(); refreshCap(); renderRecentList();
-    toast((endpoint?"저장 완료":"기록됨(데모)")+" · 다음 "+snShow());
+    toast((endpoint?"저장":"기록(데모)")+" · 다음 "+snShow());
   }
+
+  // 백그라운드 전송
+  trySend(rec, photosCopy);
 }
+
+function trySend(rec, photoArr){
+  if(!endpoint) return; // 데모 모드
+  const fd=new FormData(); fd.append("payload",JSON.stringify(rec));
+  photoArr.forEach((p,i)=>fd.append("photo"+(i+1),p));
+  fetch(endpoint,{method:"POST",body:fd})
+    .then(r=>{ if(!r.ok) throw new Error("bad"); })
+    .catch(()=>{ outbox.push({rec:rec,photos:photoArr}); fail++; refreshCap(); toast("전송 실패 — 미전송 보관("+outbox.length+")",true); });
+}
+
+// 미전송분 주기적 자동 재전송
+function flushOutbox(){
+  if(!endpoint||!outbox.length) return;
+  const item=outbox.shift();
+  const fd=new FormData(); fd.append("payload",JSON.stringify(item.rec));
+  item.photos.forEach((p,i)=>fd.append("photo"+(i+1),p));
+  fetch(endpoint,{method:"POST",body:fd})
+    .then(r=>{ if(!r.ok) throw new Error("bad"); fail=Math.max(0,fail-1); refreshCap(); })
+    .catch(()=>{ outbox.unshift(item); });
+}
+setInterval(flushOutbox, 12000);
 
 function showRecent(rec){
   $("recentBar").style.display="flex";
