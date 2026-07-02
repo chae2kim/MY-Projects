@@ -397,8 +397,11 @@ function refreshCap(){
 }
 
 /* camera */
+const useNativeCamera = /Android/i.test(navigator.userAgent||"");  // 갤럭시 등 안드로이드 = 기본 카메라 앱 사용
+function showNativeHint_(){ const m=$("camMsg"); m.style.display="flex"; m.innerHTML='<div>📷 촬영 버튼을 누르면<br>카메라가 열립니다</div>'; }
 async function startCamera(){
   $("camMsg").style.display="none"; $("video").style.display="block"; $("freeze").style.display="none";
+  if(useNativeCamera){ $("video").style.display="none"; showNativeHint_(); return; }  // 안드로이드는 라이브뷰 대신 기본카메라
   if(stream) return;
   try{
     stream=await navigator.mediaDevices.getUserMedia({
@@ -454,8 +457,8 @@ function showCamFallback(msg){
 
 /* ── shoot/save flow (state machine) ── */
 let capState="live"; // live | shot1(2장모드 1장후) | shotDone
-function showLive(){ $("video").style.display="block"; $("freeze").style.display="none"; }
-function showFreeze(d){ $("video").style.display="none"; $("freeze").src=d; $("freeze").style.display="block"; }
+function showLive(){ if(useNativeCamera){ $("video").style.display="none"; $("freeze").style.display="none"; showNativeHint_(); return; } $("video").style.display="block"; $("freeze").style.display="none"; $("camMsg").style.display="none"; }
+function showFreeze(d){ $("video").style.display="none"; $("camMsg").style.display="none"; $("freeze").src=d; $("freeze").style.display="block"; }
 function updateMainBtn(){
   const btn=$("shootBtn");
   let t, cls="";
@@ -498,7 +501,7 @@ function pushPhoto(d){
   else capState="shotDone";
   updateMainBtn();
 }
-function compressFile(file){return new Promise(res=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{const s=Math.min(1,2560/img.width),w=Math.round(img.width*s),h=Math.round(img.height*s),c=$("cv");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.9));};img.src=url;});}
+function compressFile(file){return new Promise(res=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{const s=Math.min(1,3500/img.width),w=Math.round(img.width*s),h=Math.round(img.height*s),c=$("cv");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.9));};img.src=url;});}
 
 function retake(){ photos=[]; capState="live"; showLive(); updateMainBtn(); }
 $("retakeBtn").onclick=retake;
