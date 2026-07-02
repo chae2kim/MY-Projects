@@ -335,6 +335,7 @@ let stream=null;
   const d=new Date(); $("ym").value=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
   renderChips(); renderDD(); refreshStart();
   if(window.indexedDB){ updatePending(); flushOutbox(); }
+  $("video").addEventListener("click", tapFocus_);
 })();
 
 /* ── setup logic ── */
@@ -400,11 +401,45 @@ async function startCamera(){
   $("camMsg").style.display="none"; $("video").style.display="block"; $("freeze").style.display="none";
   if(stream) return;
   try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:2560},height:{ideal:1920}},audio:false});
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{
+        facingMode:{ideal:"environment"},
+        width:{ideal:4096}, height:{ideal:2160},   // 폰이 줄 수 있는 최대치 요청
+        focusMode:{ideal:"continuous"},            // 연속 자동초점
+        advanced:[{focusMode:"continuous"}]
+      },
+      audio:false
+    });
     $("video").srcObject=stream;
+    applyFocus_();          // 초점 설정 적용 시도
   }catch(e){
     showCamFallback("카메라를 시작할 수 없어요.\n(HTTPS·카메라 권한 필요)");
   }
+}
+// 연속 자동초점 적용(지원하는 폰만)
+function applyFocus_(){
+  try{
+    var track=stream && stream.getVideoTracks()[0];
+    if(!track||!track.getCapabilities) return;
+    var caps=track.getCapabilities();
+    if(caps.focusMode && caps.focusMode.indexOf("continuous")>=0){
+      track.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(function(){});
+    }
+  }catch(e){}
+}
+// 화면 탭 → 그 지점 초점 시도(지원 폰만), 미지원이면 무시
+function tapFocus_(){
+  try{
+    var track=stream && stream.getVideoTracks()[0];
+    if(!track||!track.getCapabilities) return;
+    var caps=track.getCapabilities();
+    if(caps.focusMode && caps.focusMode.indexOf("single-shot")>=0){
+      track.applyConstraints({advanced:[{focusMode:"single-shot"}]})
+        .then(function(){ setTimeout(applyFocus_, 1200); })  // 1.2초 뒤 연속모드 복귀
+        .catch(function(){});
+      toast("초점 맞추는 중…");
+    }
+  }catch(e){}
 }
 function stopCamera(){ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} }
 function showCamFallback(msg){
