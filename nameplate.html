@@ -473,7 +473,10 @@ $("shootBtn").onclick=onMainBtn;
 function onMainBtn(){
   if(!startReady())return;
   if(capState==="live") doShoot();
-  else if(capState==="shot1"){ capState="live"; showLive(); updateMainBtn(); } // 한 장 더
+  else if(capState==="shot1"){
+    if(useNativeCamera){ doShoot(); }                       // 갤럭시: 바로 카메라 다시 열기
+    else { capState="live"; showLive(); updateMainBtn(); }  // 아이폰: 라이브뷰로 복귀 후 촬영
+  }
   else saveFlow();
 }
 function doShoot(){
