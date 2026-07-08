@@ -532,8 +532,8 @@ function doSave(){
     uuid:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()) };
   const photosCopy=photos.slice();
 
-  // 1) 폰에 영구 보관 먼저 (앱 꺼져도/끊겨도 안 사라짐)
-  if(endpoint){ idbPut({uuid:rec.uuid, rec:rec, photos:photosCopy, ts:Date.now()}).then(updatePending); }
+  // 1) 폰에 영구 보관 먼저 → 완료되면 전송 시도
+  if(endpoint){ idbPut({uuid:rec.uuid, rec:rec, photos:photosCopy, ts:Date.now()}).then(function(){ updatePending(); flushOutbox(); }); }
 
   // 2) UI 즉시 진행 (서버 응답 안 기다림)
   shot++; savedKeys.add(rec.workDate+"|"+rec.snNorm); recent.unshift(rec); if(recent.length>30)recent.pop();
@@ -549,9 +549,6 @@ function doSave(){
     retake(); refreshCap(); renderRecentList();
     toast((endpoint?"저장":"기록(데모)")+" · 다음 "+snShow());
   }
-
-  // 3) 백그라운드 전송 시도 (성공하면 폰에서 제거)
-  if(endpoint) flushOutbox();
 }
 
 // 미전송분 전송 (시작 시 + 주기적 + 저장 직후)
@@ -562,13 +559,20 @@ async function flushOutbox(){
   try{
     const all=await idbAll();
     for(const item of all){
+      const fd=new FormData(); fd.append("payload",JSON.stringify(item.rec));
+      item.photos.forEach((p,i)=>fd.append("photo"+(i+1),p));
+      let reached=false;
       try{
-        const fd=new FormData(); fd.append("payload",JSON.stringify(item.rec));
-        item.photos.forEach((p,i)=>fd.append("photo"+(i+1),p));
-        const r=await fetch(endpoint,{method:"POST",body:fd});
-        if(r.ok){ await idbDelete(item.uuid); }
-        else break; // 서버 오류 → 다음 기회에
-      }catch(e){ break; } // 네트워크 끊김 → 다음 기회에
+        // Apps Script는 CORS 응답을 안 줌 → no-cors로 전송. 응답은 못 읽지만 요청은 도달.
+        await fetch(endpoint,{method:"POST",body:fd,mode:"no-cors",keepalive:true});
+        reached=true; // 정상 반환 = 도달
+      }catch(e){
+        // 안드로이드 Chrome은 no-cors 응답 처리에서 에러를 던지기도 하는데, 이때도 요청 자체는 도달함.
+        // 네트워크가 온라인이면 도달한 것으로 간주(서버가 uuid로 중복 방지하므로 안전).
+        reached = navigator.onLine;
+      }
+      if(reached){ await idbDelete(item.uuid); }
+      else break; // 진짜 오프라인 → 다음 기회에 재시도
     }
   } finally { flushing=false; await updatePending(); }
 }
