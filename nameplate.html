@@ -488,11 +488,11 @@ function doShoot(){
     const scale=Math.max(cw/vw, ch/vh);
     const sw=cw/scale, sh=ch/scale;
     const sx=(vw-sw)/2, sy=(vh-sh)/2;
-    const outW=Math.min(3000, Math.round(sw));
+    const outW=Math.min(2000, Math.round(sw));
     const outH=Math.round(outW*(sh/sw));
     cv.width=outW; cv.height=outH;
     cv.getContext("2d").drawImage(v, sx,sy,sw,sh, 0,0,outW,outH);
-    pushPhoto(cv.toDataURL("image/jpeg",0.9));
+    pushPhoto(cv.toDataURL("image/jpeg",0.85));
   }else{
     let inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.capture="environment";
     inp.onchange=e=>{const f=e.target.files[0];if(f)compressFile(f).then(pushPhoto);};inp.click();
@@ -504,7 +504,7 @@ function pushPhoto(d){
   else capState="shotDone";
   updateMainBtn();
 }
-function compressFile(file){return new Promise(res=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{const s=Math.min(1,3500/img.width),w=Math.round(img.width*s),h=Math.round(img.height*s),c=$("cv");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.9));};img.src=url;});}
+function compressFile(file){return new Promise(res=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{const s=Math.min(1,2000/img.width),w=Math.round(img.width*s),h=Math.round(img.height*s),c=$("cv");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.85));};img.src=url;});}
 
 function retake(){ photos=[]; capState="live"; showLive(); updateMainBtn(); }
 $("retakeBtn").onclick=retake;
