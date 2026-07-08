@@ -561,18 +561,15 @@ async function flushOutbox(){
     for(const item of all){
       const fd=new FormData(); fd.append("payload",JSON.stringify(item.rec));
       item.photos.forEach((p,i)=>fd.append("photo"+(i+1),p));
-      let reached=false;
+      let ok=false;
       try{
-        // Apps Script는 CORS 응답을 안 줌 → no-cors로 전송. 응답은 못 읽지만 요청은 도달.
-        await fetch(endpoint,{method:"POST",body:fd,mode:"no-cors",keepalive:true});
-        reached=true; // 정상 반환 = 도달
-      }catch(e){
-        // 안드로이드 Chrome은 no-cors 응답 처리에서 에러를 던지기도 하는데, 이때도 요청 자체는 도달함.
-        // 네트워크가 온라인이면 도달한 것으로 간주(서버가 uuid로 중복 방지하므로 안전).
-        reached = navigator.onLine;
-      }
-      if(reached){ await idbDelete(item.uuid); }
-      else break; // 진짜 오프라인 → 다음 기회에 재시도
+        const r=await fetch(endpoint,{method:"POST",body:fd,redirect:"follow"});
+        const txt=await r.text();
+        // 서버가 사진 저장까지 완료(ok) 또는 이미 저장됨(duplicated)이라고 응답한 경우만 성공
+        try{ const j=JSON.parse(txt); ok=(j.ok===true)||(j.duplicated===true); }catch(_){ ok=false; }
+      }catch(e){ ok=false; }
+      if(ok){ await idbDelete(item.uuid); }   // 서버 확인됨 → 폰에서 제거
+      else break;                              // 미확인 → 폰에 남겨 재시도(다음 기회)
     }
   } finally { flushing=false; await updatePending(); }
 }
