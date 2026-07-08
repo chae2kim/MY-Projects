@@ -379,7 +379,7 @@ $("startBtn").onclick=()=>{ if(startReady()) goCapture(); };
 /* ── capture screen ── */
 function ymDisp(){const v=$("ym").value;return v?v.replace("-","."):"—";}
 function todayYmd(){const d=new Date();return ""+d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");}
-function fname(idx,total){const sn=snNorm()||"NA";return (total>1)?(sn+"_"+idx+".jpg"):(sn+".jpg");}
+function fname(idx,total){const sn=snNorm()||"NA";return sn+".jpg";}
 
 function show(scr){document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on"));$(scr).classList.add("on");}
 function goCapture(){ photos=[]; capState="live"; show("scCap"); refreshCap(); startCamera(); }
@@ -510,12 +510,7 @@ function retake(){ photos=[]; capState="live"; showLive(); updateMainBtn(); }
 $("retakeBtn").onclick=retake;
 
 function saveFlow(){
-  const key=todayYmd()+"|"+snNorm();
-  if(savedKeys.has(key)&&!repairTarget){
-    $("dupMsg").textContent="오늘 이미 "+snShow()+" 사진이 저장되어 있어요. 그래도 저장할까요?";
-    $("dupConfirm").classList.add("on"); return;
-  }
-  doSave();
+  doSave();  // 같은 SN 재촬영도 경고 없이 저장 (잘못 찍은 것도 남겨 비교)
 }
 $("dupOk").onclick=()=>{ $("dupConfirm").classList.remove("on"); doSave(); };
 
