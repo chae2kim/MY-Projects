@@ -488,11 +488,11 @@ function doShoot(){
     const scale=Math.max(cw/vw, ch/vh);
     const sw=cw/scale, sh=ch/scale;
     const sx=(vw-sw)/2, sy=(vh-sh)/2;
-    const outW=Math.min(2000, Math.round(sw));
+    const outW=Math.min(3000, Math.round(sw));
     const outH=Math.round(outW*(sh/sw));
     cv.width=outW; cv.height=outH;
     cv.getContext("2d").drawImage(v, sx,sy,sw,sh, 0,0,outW,outH);
-    pushPhoto(cv.toDataURL("image/jpeg",0.85));
+    pushPhoto(cv.toDataURL("image/jpeg",0.9));
   }else{
     let inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.capture="environment";
     inp.onchange=e=>{const f=e.target.files[0];if(f)compressFile(f).then(pushPhoto);};inp.click();
@@ -504,7 +504,7 @@ function pushPhoto(d){
   else capState="shotDone";
   updateMainBtn();
 }
-function compressFile(file){return new Promise(res=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{const s=Math.min(1,2000/img.width),w=Math.round(img.width*s),h=Math.round(img.height*s),c=$("cv");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.85));};img.src=url;});}
+function compressFile(file){return new Promise(res=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{const s=Math.min(1,3500/img.width),w=Math.round(img.width*s),h=Math.round(img.height*s),c=$("cv");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.9));};img.src=url;});}
 
 function retake(){ photos=[]; capState="live"; showLive(); updateMainBtn(); }
 $("retakeBtn").onclick=retake;
@@ -574,6 +574,14 @@ async function flushOutbox(){
   } finally { flushing=false; await updatePending(); }
 }
 setInterval(flushOutbox, 8000);
+
+// 앱을 나가거나(화면 끔·다른 앱 전환) 다시 돌아올 때 전송 재시도
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState==="hidden"){ flushOutbox(); }   // 나가기 직전 최대한 밀어보내기
+  else { updatePending(); flushOutbox(); }                    // 돌아오면 이어서 전송
+});
+window.addEventListener("focus", flushOutbox);
+window.addEventListener("online", flushOutbox);                // 인터넷 다시 연결되면 즉시
 
 // 닫기 경고 (미전송 남아있으면)
 window.addEventListener("beforeunload", function(e){
