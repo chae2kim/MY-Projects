@@ -379,7 +379,7 @@ $("startBtn").onclick=()=>{ if(startReady()) goCapture(); };
 /* ── capture screen ── */
 function ymDisp(){const v=$("ym").value;return v?v.replace("-","."):"—";}
 function todayYmd(){const d=new Date();return ""+d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");}
-function fname(idx,total){const sn=snNorm()||"NA";return sn+".jpg";}
+function fname(idx,total){const sn=snNorm()||"NA";return (total>1)?(sn+"-"+idx+".jpg"):(sn+".jpg");}
 
 function show(scr){document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on"));$(scr).classList.add("on");}
 function goCapture(){ photos=[]; capState="live"; show("scCap"); refreshCap(); startCamera(); }
