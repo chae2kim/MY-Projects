@@ -504,7 +504,13 @@ function pushPhoto(d){
   else capState="shotDone";
   updateMainBtn();
 }
-function compressFile(file){return new Promise(res=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{const s=Math.min(1,3500/img.width),w=Math.round(img.width*s),h=Math.round(img.height*s),c=$("cv");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.9));};img.src=url;});}
+function compressFile(file){return new Promise(res=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{URL.revokeObjectURL(url);
+  if(img.width<=4000){ // 리사이즈 불필요 → 원본 그대로(무손실, 재압축 안 함)
+    const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(file);
+  }else{ // 아주 큰 사진만 4000px로 줄임(고품질)
+    const s=4000/img.width,w=Math.round(img.width*s),h=Math.round(img.height*s),c=$("cv");
+    c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);res(c.toDataURL("image/jpeg",0.92));
+  }};img.src=url;});}
 
 function retake(){ photos=[]; capState="live"; showLive(); updateMainBtn(); }
 $("retakeBtn").onclick=retake;
