@@ -9,21 +9,22 @@
 <title>검정명판 스캔</title>
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <!--
-  ┌─ Apps Script 쪽 ─────────────────────────────────────────────┐
-  │ 전송 필드                                                     │
-  │   payload : JSON (아래 키)                                    │
-  │   photo1  : 스캔본 JPG   → p.fileName                         │
-  │   photo2  : 카메라 원본  → p.originalName  (있을 때만)         │
-  │   pdf     : 스캔본 PDF   → p.pdfName                          │
+  ┌─ 전송 규약 (nameplate_scan) ─────────────────────────────────┐
+  │ 기존 nameplate.html 과 반드시 다른 Apps Script 주소를 쓰세요. │
+  │ 큐(IndexedDB)는 이미 분리되어 있습니다.                       │
   │                                                              │
-  │   var o = e.parameter.photo2;                                 │
-  │   if (o && p.originalName) folder.createFile(                 │
-  │     Utilities.newBlob(Utilities.base64Decode(                 │
-  │       o.split(",")[1]), "image/jpeg", p.originalName));        │
+  │ 필드                                                          │
+  │   payload : JSON — 아래 키                                    │
+  │   pdf     : 항상 전송 → p.pdfName                             │
+  │   photo1  : 저장 형식이 "PDF + JPG" 이상일 때 → p.fileName    │
+  │   photo2  : "+ 원본" 일 때 카메라 원본 → p.originalName       │
   │                                                              │
-  │ payload 키: model, form, ym, lotQty, shotIdx, qtyInShot,      │
-  │   doneQty, fileName, originalName, pdfName, hasOriginal,      │
-  │   scanWidth, scanHeight, filter, worker                      │
+  │ payload 키: tool, saveMode, model, form, cat, ym, lotQty,     │
+  │   shotIdx, qtyInShot, doneQty, pdfName, fileName,            │
+  │   originalName, hasOriginal, scanWidth, scanHeight,          │
+  │   filter, worker, uuid, kind("lotPdf"), sheets               │
+  │                                                              │
+  │ 응답은 {"ok":true} 또는 {"duplicated":true} 여야 큐가 비웁니다.│
   └──────────────────────────────────────────────────────────────┘
 -->
 <style>
@@ -194,12 +195,13 @@
         <div class="hint">고화질은 아이폰 기본 카메라를 열어 원본 해상도로 찍습니다. 명판이 여러 개 들어가는 사진은 이쪽이어야 각인이 읽힙니다. 빠른 연속은 화면에서 바로 찍지만 해상도가 1/6 정도로 떨어집니다.</div>
       </div>
       <div class="fld">
-        <label>원본 사진</label>
+        <label>저장 형식</label>
         <div class="seg">
-          <button class="opt on" id="mOrigOn">원본도 함께 저장</button>
-          <button class="opt" id="mOrigOff">스캔본만</button>
+          <button class="opt on" id="sv1">PDF만</button>
+          <button class="opt" id="sv2">PDF + JPG</button>
+          <button class="opt" id="sv3">+ 원본</button>
         </div>
-        <div class="hint">기본 카메라가 만든 파일을 다시 인코딩하지 않고 그대로 올립니다. 화질 손실이 0이고, 나중에 다시 보정할 수도 있습니다. 대신 한 장에 3~5MB가 더 올라갑니다.</div>
+        <div class="hint">PDF 안에 스캔본이 원본 해상도로 들어갑니다. "+ 원본"은 카메라가 만든 파일을 재인코딩 없이 한 장 더 올립니다(한 장에 3~5MB 추가).</div>
       </div>
       <div class="fld">
         <label>스캔 색상</label>
@@ -299,7 +301,7 @@
 <div class="sheet" id="setSheet">
   <div class="card2">
     <h3>저장 연결 설정 <button class="x" data-close="setSheet">×</button></h3>
-    <p>Apps Script 웹앱 주소를 넣으면 JPG와 PDF가 함께 전송됩니다. 비워두면 저장 없이 동작만 확인합니다.</p>
+    <p><b style="color:var(--bad)">테스트용 주소를 넣으세요.</b> 기존 nameplate.html이 쓰는 주소를 넣으면 실제 폴더와 시트에 테스트 자료가 섞입니다. 비워두면 저장 없이 동작만 확인합니다.</p>
     <input type="text" id="endpoint" placeholder="https://script.google.com/macros/s/.../exec">
     <input type="text" id="worker" placeholder="작업자 이름 (선택)">
     <div class="rh">이번 세션 기록</div>
@@ -346,12 +348,13 @@ let sel=null, activeCat=null, fastMode=false;
 let lotTotal=0, doneQty=0, shotIdx=1, qty=1;   // 총 개수 · 담은 개수 · 몇 번째 장 · 이번 장 개수
 let photos=[];            // 이번 장 (1개)
 let lotPhotos=[];         // 이번 LOT 전체 (통합 PDF용)
-let endpoint="https://script.google.com/macros/s/AKfycbyjs47ayp6YQp94p0q06vPIjok-LmBGI5_IhKQWeG4H-N2GJ7SP0E2oDF_agdGeqYTp/exec";
+let endpoint="";          // 테스트용 Apps Script 주소를 설정에서 넣어 쓴다 (실제 nameplate 주소와 분리)
 let worker="";
 let pendingCount=0, recent=[];
+let usedNames=new Set();   // 이번 작업에서 이미 쓴 파일명
 let stream=null, filterMode="color", lastQuad=null;
 let hiRes=true;           // true면 아이폰 기본 카메라(원본 해상도)로 촬영
-let keepOrig=true;        // 카메라 원본 파일을 그대로 함께 전송
+let saveMode="pdf";       // pdf | pdf+jpg | all(+원본)
 let origData=null, origType="image/jpeg";
 let capState="live";      // live | shotDone
 
@@ -379,8 +382,10 @@ function syncFilterUI(){
 $("search").addEventListener("input",renderDD);
 $("lotQty").addEventListener("input",refreshStart);
 $("ym").addEventListener("change",refreshStart);
-$("mOrigOn").onclick=()=>{keepOrig=true;$("mOrigOn").classList.add("on");$("mOrigOff").classList.remove("on");};
-$("mOrigOff").onclick=()=>{keepOrig=false;$("mOrigOff").classList.add("on");$("mOrigOn").classList.remove("on");};
+[["sv1","pdf"],["sv2","pdf+jpg"],["sv3","all"]].forEach(([id,v])=>{
+  $(id).onclick=()=>{ saveMode=v;
+    ["sv1","sv2","sv3"].forEach(x=>$(x).classList.toggle("on", x===id)); };
+});
 $("mHiRes").onclick=()=>{hiRes=true;$("mHiRes").classList.add("on");$("mLive").classList.remove("on");};
 $("mLive").onclick=()=>{hiRes=false;$("mLive").classList.add("on");$("mHiRes").classList.remove("on");};
 $("mAuto").onclick=()=>{fastMode=false;$("mAuto").classList.add("on");$("mFast").classList.remove("on");};
@@ -413,7 +418,13 @@ function renderDD(){
 function digits(v){return (String(v).match(/\d/g)||[]).join("");}
 function ymTag(){return ($("ym").value||"").replace("-","");}
 function baseName(){return sel?sel.name:"NA";}
-function fileBase(){return baseName()+"-"+shotIdx;}
+/* 파일명: 기종명 (수량). 같은 수량이 또 나오면 -2, -3 을 붙여 덮어쓰기를 막는다 */
+function uniqueBase(b){
+  if(!usedNames.has(b)) return b;
+  let i=2; while(usedNames.has(b+"-"+i)) i++;
+  return b+"-"+i;
+}
+function fileBase(){return uniqueBase(baseName()+" ("+qty+"EA)");}
 function fnameJpg(){return fileBase()+".jpg";}
 function pdfName(){return fileBase()+".pdf";}
 function remain(){return Math.max(0, lotTotal-doneQty);}
@@ -421,13 +432,13 @@ function remain(){return Math.max(0, lotTotal-doneQty);}
 function refreshStart(){
   const q=parseInt(digits($("lotQty").value)||"0",10);
   const ok=!!sel && q>0 && !!$("ym").value;
-  $("qtyPreview").textContent = ok ? (sel.name+"-1.jpg 부터 · 총 "+q+"개") : "";
+  $("qtyPreview").textContent = ok ? ("파일명 예: "+sel.name+" (10EA).jpg · 총 "+q+"개") : "";
   $("startBtn").disabled=!ok;
 }
 $("startBtn").onclick=()=>{
   if($("startBtn").disabled) return;
   lotTotal=parseInt(digits($("lotQty").value),10);
-  doneQty=0; shotIdx=1; qty=Math.min(10,lotTotal); lotPhotos=[];
+  doneQty=0; shotIdx=1; qty=Math.min(10,lotTotal); lotPhotos=[]; usedNames=new Set();
   goCapture();
 };
 
@@ -451,7 +462,7 @@ function refreshCap(){
   $("pbarFill").style.width=(lotTotal?Math.round(doneQty/lotTotal*100):0)+"%";
   if(qty>remain()) qty=Math.max(1,remain());
   $("qtyVal").textContent=remain()>0?qty:0;
-  $("fileTag").textContent=remain()>0?(fnameJpg()+" · "+qty+"개"):"LOT 완료";
+  $("fileTag").textContent=remain()>0?fnameJpg():"LOT 완료";
   $("qMinus").disabled=(qty<=1||remain()===0);
   $("qPlus").disabled=(qty>=remain());
   document.querySelectorAll(".qquick button").forEach(b=>{
@@ -515,7 +526,7 @@ function loadFileToSrc(file){
     fr.onerror=()=>rej(new Error("read"));
     fr.onload=()=>{
       const dataUrl=fr.result;
-      origData = keepOrig ? dataUrl : null;         // 재인코딩 없이 원본 그대로
+      origData = (saveMode==="all") ? dataUrl : null;   // 재인코딩 없이 원본 그대로
       origType = file.type || "image/jpeg";
       const img=new Image();
       img.onload=()=>{
@@ -1041,15 +1052,21 @@ function doSave(){
   setTimeout(()=>{
     const ph=photos[0];
     ph.idx=shotIdx; ph.qty=qty;
-    const hasOrig=!!origData;
-    const rec={ ts:new Date().toISOString(), form:sel.form, cat:sel.cat, model:sel.name, ym:$("ym").value,
+    const wantJpg=(saveMode!=="pdf");
+    const hasOrig=(saveMode==="all") && !!origData;
+    const base=fileBase();            // 이 장의 파일명 확정
+    usedNames.add(base);
+    const rec={ ts:new Date().toISOString(), tool:"nameplate_scan", saveMode:saveMode,
+      form:sel.form, cat:sel.cat, model:sel.name, ym:$("ym").value,
       lotQty:lotTotal, shotIdx:shotIdx, qtyInShot:qty, doneQty:doneQty+qty,
-      fileName:fnameJpg(), pdfName:pdfName(), filter:filterMode, scan:true, worker:worker,
-      hasOriginal:hasOrig, originalName:hasOrig?(fileBase()+"_orig.jpg"):"",
-      scanWidth:ph.w, scanHeight:ph.h,
+      pdfName:base+".pdf",
+      fileName:wantJpg?(base+".jpg"):"", originalName:hasOrig?(base+"_orig.jpg"):"",
+      hasOriginal:hasOrig, scanWidth:ph.w, scanHeight:ph.h,
+      filter:filterMode, scan:true, worker:worker,
       uuid:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()) };
     let pdf=""; try{ pdf=buildPdfBase64([ph], pdfMeta()); }catch(e){}
-    const send=[ph];
+    const send=[];
+    if(wantJpg) send.push(ph);
     if(hasOrig) send.push({d:origData, w:0, h:0, orig:true});
     if(endpoint) idbPut({uuid:rec.uuid, rec:rec, photos:send, pdf:pdf, ts:Date.now()}).then(()=>{updatePending();flushOutbox();});
 
@@ -1077,8 +1094,9 @@ function sendLotPdf(){
   setTimeout(()=>{
     try{
       const pdf=buildPdfBase64(lotPhotos, pdfMeta());
-      const name=baseName()+"_LOT.pdf";
-      const rec={ ts:new Date().toISOString(), form:sel.form, cat:sel.cat, model:sel.name, ym:$("ym").value,
+      const name=baseName()+" (LOT "+lotTotal+"EA).pdf";
+      const rec={ ts:new Date().toISOString(), tool:"nameplate_scan", saveMode:saveMode,
+        form:sel.form, cat:sel.cat, model:sel.name, ym:$("ym").value,
         lotQty:lotTotal, shotIdx:0, qtyInShot:0, doneQty:doneQty, kind:"lotPdf", sheets:lotPhotos.length,
         fileName:"", pdfName:name, worker:worker,
         uuid:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()) };
