@@ -505,13 +505,17 @@ function pushPhoto(d){
   updateMainBtn();
 }
 function compressFile(file){return new Promise(res=>{
-  // 기본 카메라(갤럭시 등) 사진은 손대지 않고 원본 그대로 전송 → 화질 손실 0
-  const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=()=>{
-    // 혹시 읽기 실패 시에만 캔버스 폴백
-    const img=new Image(),url=URL.createObjectURL(file);
-    img.onload=()=>{const c=$("cv");c.width=img.width;c.height=img.height;c.getContext("2d").drawImage(img,0,0);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.95));};
-    img.src=url;
-  }; fr.readAsDataURL(file);
+  // 균형점: 2400px / 품질 0.88 → 글자 판독엔 충분히 선명, 파일은 작아 업로드 빠름
+  const img=new Image(), url=URL.createObjectURL(file);
+  img.onload=()=>{
+    URL.revokeObjectURL(url);
+    const maxW=2400, s=Math.min(1, maxW/img.width);
+    const w=Math.round(img.width*s), h=Math.round(img.height*s), c=$("cv");
+    c.width=w; c.height=h; c.getContext("2d").drawImage(img,0,0,w,h);
+    res(c.toDataURL("image/jpeg",0.88));
+  };
+  img.onerror=()=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(file); };
+  img.src=url;
 });}
 
 function retake(){ photos=[]; capState="live"; showLive(); updateMainBtn(); }
