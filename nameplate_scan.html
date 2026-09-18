@@ -382,7 +382,7 @@ function renderDD(){
 }
 function digits(v){return (String(v).match(/\d/g)||[]).join("");}
 function ymTag(){return ($("ym").value||"").replace("-","");}
-function baseName(){return (sel?sel.name:"NA")+"_"+ymTag();}
+function baseName(){return sel?sel.name:"NA";}
 function fileBase(){return baseName()+"-"+shotIdx;}
 function fnameJpg(){return fileBase()+".jpg";}
 function pdfName(){return fileBase()+".pdf";}
@@ -391,7 +391,7 @@ function remain(){return Math.max(0, lotTotal-doneQty);}
 function refreshStart(){
   const q=parseInt(digits($("lotQty").value)||"0",10);
   const ok=!!sel && q>0 && !!$("ym").value;
-  $("qtyPreview").textContent = ok ? (sel.name+"_"+ymTag()+"-1.jpg 부터 · 총 "+q+"개") : "";
+  $("qtyPreview").textContent = ok ? (sel.name+"-1.jpg 부터 · 총 "+q+"개") : "";
   $("startBtn").disabled=!ok;
 }
 $("startBtn").onclick=()=>{
@@ -493,19 +493,56 @@ function updateMainBtn(){
 $("shootBtn").onclick=()=>{ if(!startReady())return; if(capState==="live") doShoot(); else doSave(); };
 
 /* 카메라가 보는 화면 전체를 그대로 담는다 (잘라내기 없음) */
-function grabFrame(){
-  const v=$("video"), s=$("src");
+function frameSize(){
+  const v=$("video");
   const vw=v.videoWidth||1280, vh=v.videoHeight||960;
-  const outW=Math.min(2800, vw), outH=Math.round(outW*vh/vw);
-  s.width=outW; s.height=outH;
-  s.getContext("2d").drawImage(v,0,0,outW,outH);
+  const outW=Math.min(2800, vw);
+  return {w:outW, h:Math.round(outW*vh/vw)};
+}
+/* 손떨림 대책: 짧게 여러 장면을 받아 가장 또렷한 것을 고른다 */
+const BURST=5, BURST_GAP=70;
+function sharpness(cv){
+  // 화면 가운데를 원본 배율로 떼어 라플라시안 분산을 잰다(값이 클수록 또렷)
+  const S=420, sx=Math.max(0,(cv.width-S)/2|0), sy=Math.max(0,(cv.height-S)/2|0);
+  const w=Math.min(S,cv.width), h=Math.min(S,cv.height);
+  const d=cv.getContext("2d").getImageData(sx,sy,w,h).data;
+  const g=new Float32Array(w*h);
+  for(let i=0,p=0;i<w*h;i++,p+=4) g[i]=0.299*d[p]+0.587*d[p+1]+0.114*d[p+2];
+  let sum=0,sum2=0,cnt=0;
+  for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
+    const i=y*w+x;
+    const L=4*g[i]-g[i-1]-g[i+1]-g[i-w]-g[i+w];
+    sum+=L; sum2+=L*L; cnt++;
+  }
+  if(!cnt) return 0;
+  const m=sum/cnt; return sum2/cnt-m*m;
+}
+function delay(ms){return new Promise(r=>setTimeout(r,ms));}
+async function burstCapture(){
+  const v=$("video"), s=$("src"), sz=frameSize();
+  const scratch=document.createElement("canvas"); scratch.width=sz.w; scratch.height=sz.h;
+  const sc=scratch.getContext("2d");
+  s.width=sz.w; s.height=sz.h;
+  let best=-1;
+  for(let i=0;i<BURST;i++){
+    sc.drawImage(v,0,0,sz.w,sz.h);
+    const score=sharpness(scratch);
+    if(score>best){ best=score; s.getContext("2d").drawImage(scratch,0,0); }
+    if(i<BURST-1) await delay(BURST_GAP);
+  }
+  return best;
 }
 function doShoot(){
   if(!stream){
     const inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.capture="environment";
     inp.onchange=e=>{const f=e.target.files[0];if(f)loadFileToSrc(f).then(afterGrab);};inp.click(); return;
   }
-  grabFrame(); afterGrab();
+  busy(true,"또렷한 장면 고르는 중");
+  burstCapture().then(score=>{
+    busy(false);
+    if(score < 18) toast("흔들린 것 같아요. 결과가 흐리면 다시 찍어주세요", true);
+    afterGrab();
+  }).catch(()=>{ busy(false); toast("촬영에 실패했습니다. 다시 시도해주세요", true); });
 }
 function afterGrab(){
   if(fastMode && lastQuad) runScan(quadFromRatio(lastQuad));
@@ -805,6 +842,25 @@ function applyScanFilter(cv,mode){
         v=Math.max(0,Math.min(255,v));
         if(mode==="bw") v=v<150?0:255;
         d[p]=d[p+1]=d[p+2]=v;
+      }
+    }
+  }
+  ctx.putImageData(im,0,0);
+  unsharp(cv, mode==="color"?0.45:0.32);
+}
+/* 손떨림·원근 보정으로 무뎌진 가장자리를 되살린다 */
+function unsharp(cv,a){
+  if(!a) return;
+  const ctx=cv.getContext("2d"), w=cv.width, h=cv.height;
+  const im=ctx.getImageData(0,0,w,h), d=im.data;
+  const src=new Uint8ClampedArray(d);
+  const k=1+4*a;
+  for(let y=1;y<h-1;y++){
+    for(let x=1;x<w-1;x++){
+      const p=(y*w+x)*4;
+      for(let c=0;c<3;c++){
+        const v=k*src[p+c]-a*(src[p-4+c]+src[p+4+c]+src[p-w*4+c]+src[p+w*4+c]);
+        d[p+c]=v<0?0:(v>255?255:v);
       }
     }
   }
