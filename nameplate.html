@@ -504,13 +504,15 @@ function pushPhoto(d){
   else capState="shotDone";
   updateMainBtn();
 }
-function compressFile(file){return new Promise(res=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{URL.revokeObjectURL(url);
-  if(img.width<=4000){ // 리사이즈 불필요 → 원본 그대로(무손실, 재압축 안 함)
-    const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(file);
-  }else{ // 아주 큰 사진만 4000px로 줄임(고품질)
-    const s=4000/img.width,w=Math.round(img.width*s),h=Math.round(img.height*s),c=$("cv");
-    c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);res(c.toDataURL("image/jpeg",0.92));
-  }};img.src=url;});}
+function compressFile(file){return new Promise(res=>{
+  // 기본 카메라(갤럭시 등) 사진은 손대지 않고 원본 그대로 전송 → 화질 손실 0
+  const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=()=>{
+    // 혹시 읽기 실패 시에만 캔버스 폴백
+    const img=new Image(),url=URL.createObjectURL(file);
+    img.onload=()=>{const c=$("cv");c.width=img.width;c.height=img.height;c.getContext("2d").drawImage(img,0,0);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.95));};
+    img.src=url;
+  }; fr.readAsDataURL(file);
+});}
 
 function retake(){ photos=[]; capState="live"; showLive(); updateMainBtn(); }
 $("retakeBtn").onclick=retake;
