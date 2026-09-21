@@ -229,7 +229,7 @@
   <div class="bar">
     <button class="ic l" id="capMenu">☰</button>
     촬영
-    <span class="pend" id="pendBadge">미전송 0</span>
+    <span class="pend" id="pendBadge" style="cursor:pointer">미전송 0</span>
   </div>
   <div class="strip">
     <span class="mdl" id="capModel">—</span>
@@ -304,9 +304,19 @@
     <p><b style="color:var(--bad)">테스트용 주소를 넣으세요.</b> 기존 nameplate.html이 쓰는 주소를 넣으면 실제 폴더와 시트에 테스트 자료가 섞입니다. 비워두면 저장 없이 동작만 확인합니다.</p>
     <input type="text" id="endpoint" placeholder="https://script.google.com/macros/s/.../exec">
     <input type="text" id="worker" placeholder="작업자 이름 (선택)">
+    <button class="bigbtn" id="testConn" style="background:var(--panel2);color:var(--blue);border:1px solid var(--line);padding:13px;font-size:14px;margin-bottom:10px">연결 테스트</button>
+    <div id="connResult" style="font-size:12px;line-height:1.6;color:var(--sub);word-break:break-all;margin-bottom:10px"></div>
     <div class="rh">이번 세션 기록</div>
     <div id="recentList"><div class="empty-note">아직 없음</div></div>
     <button class="bigbtn" id="setSave" style="margin-top:12px">저장</button>
+  </div>
+</div>
+
+<div class="confirm" id="noLinkBox">
+  <div class="box">
+    <h4>드라이브 연결이 없습니다</h4>
+    <p>저장 주소가 비어 있어서 이대로 찍으면 <b>드라이브에 아무것도 저장되지 않습니다.</b> 설정에서 테스트용 Apps Script 주소를 넣고 연결 테스트를 해주세요.</p>
+    <div class="cacts"><button id="noLinkGo">저장 없이 시험</button><button class="pri" id="noLinkOpen">설정 열기</button></div>
   </div>
 </div>
 
@@ -352,6 +362,8 @@ let endpoint="";          // 테스트용 Apps Script 주소를 설정에서 넣
 let worker="";
 let pendingCount=0, recent=[];
 let usedNames=new Set();   // 이번 작업에서 이미 쓴 파일명
+let lastErr="", lastFailToast=0;
+let flushing=false;       // 전송 중 여부 (시작 직후 호출되므로 위에서 선언)
 let stream=null, filterMode="color", lastQuad=null;
 let hiRes=true;           // true면 아이폰 기본 카메라(원본 해상도)로 촬영
 let saveMode="pdf";       // pdf | pdf+jpg | all(+원본)
@@ -361,6 +373,8 @@ let capState="live";      // live | shotDone
 try{
   const lf=localStorage.getItem("np_filter"); if(lf) filterMode=lf;
   const lq=localStorage.getItem("np_quad"); if(lq) lastQuad=JSON.parse(lq);
+  endpoint=localStorage.getItem("np_scan_endpoint")||"";
+  worker=localStorage.getItem("np_scan_worker")||"";
 }catch(e){}
 
 /* ─────────── init ─────────── */
@@ -437,10 +451,14 @@ function refreshStart(){
 }
 $("startBtn").onclick=()=>{
   if($("startBtn").disabled) return;
+  if(!endpoint){ $("noLinkBox").classList.add("on"); return; }
+  beginLot();
+};
+function beginLot(){
   lotTotal=parseInt(digits($("lotQty").value),10);
   doneQty=0; shotIdx=1; qty=Math.min(10,lotTotal); lotPhotos=[]; usedNames=new Set();
   goCapture();
-};
+}
 
 /* ─────────── 촬영 ─────────── */
 function ymDisp(){const v=$("ym").value;return v?v.replace("-","."):"—";}
@@ -470,8 +488,7 @@ function refreshCap(){
     b.classList.toggle("on", v===qty && remain()>0);
     b.disabled = remain()===0 || (b.dataset.q!=="all" && v>remain());
   });
-  $("pendBadge").textContent="미전송 "+pendingCount;
-  $("pendBadge").classList.toggle("on", pendingCount>0);
+  refreshLinkBadge();
   $("lotPdfBtn").disabled=!lotPhotos.length;
   updateMainBtn();
 }
@@ -1043,8 +1060,16 @@ function db(){return new Promise((res,rej)=>{ if(_db)return res(_db);
 function idbPut(it){return db().then(d=>new Promise((res,rej)=>{const t=d.transaction("outbox","readwrite");t.objectStore("outbox").put(it);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);})).catch(()=>{});}
 function idbDelete(u){return db().then(d=>new Promise(res=>{const t=d.transaction("outbox","readwrite");t.objectStore("outbox").delete(u);t.oncomplete=()=>res();t.onerror=()=>res();})).catch(()=>{});}
 function idbAll(){return db().then(d=>new Promise(res=>{const t=d.transaction("outbox","readonly");const q=t.objectStore("outbox").getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([]);})).catch(()=>[]);}
-function updatePending(){ return idbAll().then(a=>{ pendingCount=a.length;
-  $("pendBadge").textContent="미전송 "+pendingCount; $("pendBadge").classList.toggle("on",pendingCount>0); }); }
+function updatePending(){ return idbAll().then(a=>{ pendingCount=a.length; refreshLinkBadge(); }); }
+/* 상단 배지: 주소가 없으면 빨간 경고, 있으면 미전송 개수 */
+function refreshLinkBadge(){
+  const b=$("pendBadge");
+  if(!endpoint){
+    b.textContent="⚠ 드라이브 연결 안 됨"; b.style.background="var(--bad)"; b.classList.add("on");
+  }else{
+    b.textContent="미전송 "+pendingCount; b.style.background=""; b.classList.toggle("on", pendingCount>0);
+  }
+}
 
 function doSave(){
   if(!photos.length) return;
@@ -1081,7 +1106,8 @@ function doSave(){
       $("lotDoneBox").classList.add("on"); toast("LOT 완료");
     }else{
       qty=Math.min(qty, remain()); refreshCap(); startCamera();
-      toast((endpoint?"저장":"기록(데모)")+" · 남은 "+remain()+"개");
+      if(endpoint) toast("전송 대기열에 넣음 · 남은 "+remain()+"개");
+      else toast("드라이브 연결 없음 — 저장되지 않았습니다", true);
     }
     busy(false);
   },40);
@@ -1110,10 +1136,10 @@ function sendLotPdf(){
 $("lotPdfBtn").onclick=sendLotPdf;
 $("menuPdf").onclick=()=>{ $("menuSheet").classList.remove("on"); sendLotPdf(); };
 
-let flushing=false;
 async function flushOutbox(){
   if(!endpoint||flushing) return;
   flushing=true;
+  let sentNow=0;
   try{
     const all=await idbAll();
     for(const item of all){
@@ -1124,11 +1150,26 @@ async function flushOutbox(){
       try{
         const r=await fetch(endpoint,{method:"POST",body:fd,redirect:"follow"});
         const txt=await r.text();
-        try{ const j=JSON.parse(txt); ok=(j.ok===true)||(j.duplicated===true); }catch(_){ ok=false; }
-      }catch(e){ ok=false; }
-      if(ok) await idbDelete(item.uuid); else break;
+        try{
+          const j=JSON.parse(txt);
+          ok=(j.ok===true)||(j.duplicated===true);
+          if(!ok) lastErr="스크립트 응답: "+(j.error||txt).substring(0,200);
+        }catch(_){
+          ok=false;
+          lastErr=/accounts\.google\.com|Sign in/i.test(txt)
+            ? "로그인 화면이 돌아왔습니다. 배포 액세스 권한을 '모든 사용자'로 바꾸고 새 배포를 만드세요."
+            : "JSON이 아닌 응답 (HTTP "+r.status+")";
+        }
+      }catch(e){ ok=false; lastErr="요청 실패: "+String(e); }
+      if(ok){ await idbDelete(item.uuid); sentNow++; lastErr=""; } else break;
     }
-  } finally { flushing=false; await updatePending(); }
+  } finally {
+    flushing=false; await updatePending();
+    if(sentNow>0) toast("드라이브 저장 완료 "+sentNow+"건"+(pendingCount?(" · 남은 "+pendingCount):""));
+    else if(pendingCount>0 && lastErr && Date.now()-lastFailToast>60000){
+      lastFailToast=Date.now(); toast("전송 실패 — 상단 배지를 눌러 사유 확인", true);
+    }
+  }
 }
 setInterval(flushOutbox, 8000);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden"){flushOutbox();} else {updatePending();flushOutbox();} });
@@ -1136,13 +1177,61 @@ window.addEventListener("focus", flushOutbox);
 window.addEventListener("online", flushOutbox);
 window.addEventListener("beforeunload", e=>{ if(pendingCount>0){ e.preventDefault(); e.returnValue=""; return ""; } });
 
-/* ─────────── 메뉴 / 설정 ─────────── */
+/* ─────────── 연결 진단 ─────────── */
+function connSay(html,color){ const el=$("connResult"); el.innerHTML=html; el.style.color=color||"var(--sub)"; }
+$("testConn").onclick=async ()=>{
+  const url=$("endpoint").value.trim();
+  if(!url){ connSay("주소가 비어 있습니다. Apps Script 웹앱의 <b>/exec</b> 주소를 넣어주세요.","var(--bad)"); return; }
+  if(url.indexOf("/exec")<0){
+    connSay("주소가 <b>/exec</b> 로 끝나야 합니다. /dev 주소는 본인만 열 수 있어 폰에서 실패합니다.","var(--bad)"); return;
+  }
+  connSay("확인하는 중…");
+  try{
+    const fd=new FormData();
+    fd.append("payload", JSON.stringify({tool:"nameplate_scan", ping:true, ts:Date.now()}));
+    const r=await fetch(url,{method:"POST",body:fd,redirect:"follow"});
+    const txt=await r.text();
+    let j=null; try{ j=JSON.parse(txt); }catch(_){}
+    if(j && j.ok){
+      let msg="<b style='color:var(--ok)'>연결 성공</b>";
+      if(j.folder) msg+="<br>폴더: "+j.folder;
+      if(j.sheet) msg+="<br>시트: "+j.sheet;
+      if(j.warn) msg+="<br><span style='color:var(--warn)'>"+j.warn+"</span>";
+      connSay(msg);
+    }else if(j){
+      connSay("<b style='color:var(--bad)'>스크립트가 거부했습니다</b><br>"+(j.error||txt).substring(0,300),"var(--bad)");
+    }else if(/accounts\.google\.com|로그인|Sign in/i.test(txt)){
+      connSay("<b style='color:var(--bad)'>로그인 화면이 돌아왔습니다</b><br>배포 설정에서 <b>액세스 권한을 '모든 사용자'</b>로 바꾸고 <b>새 배포</b>를 만들어주세요.","var(--bad)");
+    }else{
+      connSay("<b style='color:var(--bad)'>JSON이 아닌 응답</b> (HTTP "+r.status+")<br>"
+        +txt.replace(/</g,"&lt;").substring(0,300),"var(--bad)");
+    }
+  }catch(e){
+    connSay("<b style='color:var(--bad)'>요청 자체가 실패했습니다</b><br>"+String(e)
+      +"<br>주소 오타, 네트워크, 또는 배포가 삭제된 경우입니다.","var(--bad)");
+  }
+};
+function openSettings(){
+  $("endpoint").value=endpoint; $("worker").value=worker; renderRecentList();
+  if(pendingCount>0 && lastErr) connSay("미전송 "+pendingCount+"건<br>마지막 실패 사유: "+lastErr,"var(--bad)");
+  else connSay("");
+  $("setSheet").classList.add("on");
+}
+$("pendBadge").onclick=openSettings;
+$("noLinkOpen").onclick=()=>{ $("noLinkBox").classList.remove("on"); openSettings(); };
+$("noLinkGo").onclick=()=>{ $("noLinkBox").classList.remove("on"); beginLot(); };
 $("capMenu").onclick=()=>$("menuSheet").classList.add("on");
-$("setupGear").onclick=()=>{ $("endpoint").value=endpoint;$("worker").value=worker;renderRecentList();$("setSheet").classList.add("on"); };
-$("menuSetting").onclick=()=>{ $("menuSheet").classList.remove("on"); $("endpoint").value=endpoint;$("worker").value=worker;renderRecentList();$("setSheet").classList.add("on"); };
+$("setupGear").onclick=openSettings;
+$("menuSetting").onclick=()=>{ $("menuSheet").classList.remove("on"); openSettings(); };
 $("menuReset").onclick=()=>{ $("menuSheet").classList.remove("on"); stopCamera(); show("scSetup"); };
 $("lotNext").onclick=()=>{ $("lotDoneBox").classList.remove("on"); stopCamera(); $("lotQty").value=""; show("scSetup"); refreshStart(); };
-$("setSave").onclick=()=>{ endpoint=$("endpoint").value.trim();worker=$("worker").value.trim();$("setSheet").classList.remove("on");toast(endpoint?"저장 연결됨":"데모 모드"); };
+$("setSave").onclick=()=>{
+  endpoint=$("endpoint").value.trim(); worker=$("worker").value.trim();
+  try{ localStorage.setItem("np_scan_endpoint",endpoint); localStorage.setItem("np_scan_worker",worker); }catch(e){}
+  $("setSheet").classList.remove("on"); refreshLinkBadge();
+  toast(endpoint?"저장 연결됨 · 이 기기에 기억합니다":"주소가 비어 있어 드라이브에 저장되지 않습니다", !endpoint);
+  if(endpoint) flushOutbox();
+};
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>$(b.dataset.close).classList.remove("on"));
 document.querySelectorAll(".confirm,.sheet").forEach(s=>s.addEventListener("click",e=>{if(e.target===s)s.classList.remove("on");}));
 
