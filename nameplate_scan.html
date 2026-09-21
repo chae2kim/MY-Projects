@@ -124,9 +124,6 @@
   .loupe .cross::before{left:50%;top:0;bottom:0;width:1px;margin-left:-.5px}
   .loupe .cross::after{top:50%;left:0;right:0;height:1px;margin-top:-.5px}
   .editTools{flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
-  .fchips{display:flex;gap:7px;margin-bottom:8px}
-  .fchip{flex:1;border:1.5px solid var(--line);background:var(--panel);color:var(--sub);border-radius:11px;padding:10px 4px;font-size:13px;font-weight:700}
-  .fchip.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue)}
   .qbtns{display:flex;gap:7px;margin-bottom:9px}
   .qbtns button{flex:1;border:1px solid var(--line);background:var(--panel);border-radius:11px;padding:10px 4px;font-size:12.5px;font-weight:700;color:var(--sub)}
   .qbtns button:disabled{color:var(--muted);opacity:.6}
@@ -186,39 +183,6 @@
         <div class="hint">한 장에 몇 개를 담을지는 촬영하면서 정합니다. 사진은 순서대로 −1, −2 … 로 저장됩니다.</div>
         <div class="hint" id="qtyPreview" style="color:var(--blue);font-weight:700"></div>
       </div>
-      <div class="fld">
-        <label>촬영 방식</label>
-        <div class="seg">
-          <button class="opt on" id="mHiRes">고화질 (기본 카메라)</button>
-          <button class="opt" id="mLive">빠른 연속 (화면 카메라)</button>
-        </div>
-        <div class="hint">고화질은 아이폰 기본 카메라를 열어 원본 해상도로 찍습니다. 명판이 여러 개 들어가는 사진은 이쪽이어야 각인이 읽힙니다. 빠른 연속은 화면에서 바로 찍지만 해상도가 1/6 정도로 떨어집니다.</div>
-      </div>
-      <div class="fld">
-        <label>저장 형식</label>
-        <div class="seg">
-          <button class="opt on" id="sv1">PDF만</button>
-          <button class="opt" id="sv2">PDF + JPG</button>
-          <button class="opt" id="sv3">+ 원본</button>
-        </div>
-        <div class="hint">PDF 안에 스캔본이 원본 해상도로 들어갑니다. "+ 원본"은 카메라가 만든 파일을 재인코딩 없이 한 장 더 올립니다(한 장에 3~5MB 추가).</div>
-      </div>
-      <div class="fld">
-        <label>스캔 색상</label>
-        <div class="seg">
-          <button class="opt on" data-f="color">컬러</button>
-          <button class="opt" data-f="sharp">선명</button>
-          <button class="opt" data-f="bw">흑백</button>
-        </div>
-      </div>
-      <div class="fld">
-        <label>영역 보정</label>
-        <div class="seg">
-          <button class="opt on" id="mAuto">매번 확인</button>
-          <button class="opt" id="mFast">건너뛰기</button>
-        </div>
-        <div class="hint">건너뛰기는 직전에 잡은 영역을 그대로 씁니다. 같은 자세로 계속 찍을 때만 쓰세요.</div>
-      </div>
     </div>
   </div>
   <div class="botbar"><button class="bigbtn" id="startBtn" disabled>작업 시작</button></div>
@@ -272,11 +236,6 @@
     <div class="loupe" id="loupe"><canvas id="lc" width="112" height="112"></canvas><div class="cross"></div></div>
   </div>
   <div class="editTools">
-    <div class="fchips">
-      <button class="fchip on" data-f="color">컬러</button>
-      <button class="fchip" data-f="sharp">선명</button>
-      <button class="fchip" data-f="bw">흑백</button>
-    </div>
     <div class="qbtns">
       <button id="qAuto">자동 인식</button>
       <button id="qLast">직전 영역</button>
@@ -354,7 +313,8 @@ const MODELS=[
 const CATS=[...new Set(MODELS.map(m=>m.cat))];
 
 const $=id=>document.getElementById(id);
-let sel=null, activeCat=null, fastMode=false;
+let sel=null, activeCat=null;
+const fastMode=false;          // 영역 보정: 매번 확인
 let lotTotal=0, doneQty=0, shotIdx=1, qty=1;   // 총 개수 · 담은 개수 · 몇 번째 장 · 이번 장 개수
 let photos=[];            // 이번 장 (1개)
 let lotPhotos=[];         // 이번 LOT 전체 (통합 PDF용)
@@ -365,14 +325,14 @@ let pendingCount=0, recent=[];
 let usedNames=new Set();   // 이번 작업에서 이미 쓴 파일명
 let lastErr="", lastFailToast=0;
 let flushing=false;       // 전송 중 여부 (시작 직후 호출되므로 위에서 선언)
-let stream=null, filterMode="color", lastQuad=null;
-let hiRes=true;           // true면 아이폰 기본 카메라(원본 해상도)로 촬영
-let saveMode="pdf";       // pdf | pdf+jpg | all(+원본)
+let stream=null, lastQuad=null;
+const filterMode="color";      // 스캔 색상: 컬러
+const hiRes=true;         // 촬영 방식: 고화질(아이폰 기본 카메라)
+const saveMode="pdf";     // 저장 형식: PDF만
 let origData=null, origType="image/jpeg";
 let capState="live";      // live | shotDone
 
 try{
-  const lf=localStorage.getItem("np_filter"); if(lf) filterMode=lf;
   const lq=localStorage.getItem("np_quad"); if(lq) lastQuad=JSON.parse(lq);
   const se=localStorage.getItem("np_scan_endpoint"); endpoint=(se&&se.trim())?se.trim():DEFAULT_ENDPOINT;
   worker=localStorage.getItem("np_scan_worker")||"";
@@ -381,31 +341,15 @@ try{
 /* ─────────── init ─────────── */
 (function(){
   const d=new Date(); $("ym").value=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
-  renderChips(); renderDD(); refreshStart(); syncFilterUI();
-  document.querySelectorAll(".seg .opt[data-f], .fchip").forEach(b=>{
-    b.onclick=()=>{ filterMode=b.dataset.f; try{localStorage.setItem("np_filter",filterMode);}catch(e){}
-      syncFilterUI(); };
-  });
+  renderChips(); renderDD(); refreshStart();
   if(window.indexedDB){ updatePending(); flushOutbox(); }
   $("video").addEventListener("click", tapFocus_);
 })();
-function syncFilterUI(){
-  document.querySelectorAll(".seg .opt[data-f], .fchip").forEach(b=>b.classList.toggle("on", b.dataset.f===filterMode));
-}
 
 /* ─────────── 설정 화면 ─────────── */
 $("search").addEventListener("input",renderDD);
 $("lotQty").addEventListener("input",refreshStart);
 $("ym").addEventListener("change",refreshStart);
-[["sv1","pdf"],["sv2","pdf+jpg"],["sv3","all"]].forEach(([id,v])=>{
-  $(id).onclick=()=>{ saveMode=v;
-    ["sv1","sv2","sv3"].forEach(x=>$(x).classList.toggle("on", x===id)); };
-});
-$("mHiRes").onclick=()=>{hiRes=true;$("mHiRes").classList.add("on");$("mLive").classList.remove("on");};
-$("mLive").onclick=()=>{hiRes=false;$("mLive").classList.add("on");$("mHiRes").classList.remove("on");};
-$("mAuto").onclick=()=>{fastMode=false;$("mAuto").classList.add("on");$("mFast").classList.remove("on");};
-$("mFast").onclick=()=>{fastMode=true;$("mFast").classList.add("on");$("mAuto").classList.remove("on");
-  if(!lastQuad) toast("직전 영역이 없어 첫 장은 보정 화면이 열립니다");};
 
 function renderChips(){
   const el=$("chips"); el.innerHTML="";
