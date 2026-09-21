@@ -279,6 +279,14 @@
   </div>
 </div>
 
+<div class="confirm" id="resultBox">
+  <div class="box">
+    <h4 id="resTitle"></h4>
+    <p id="resBody" style="word-break:break-all"></p>
+    <div class="cacts"><button class="pri" id="resOk">확인</button></div>
+  </div>
+</div>
+
 <div class="confirm" id="lotDoneBox">
   <div class="box">
     <h4>LOT 촬영 완료</h4>
@@ -325,6 +333,7 @@ let pendingCount=0, recent=[];
 let usedNames=new Set();   // 이번 작업에서 이미 쓴 파일명
 let lastErr="", lastFailToast=0;
 let flushing=false;       // 전송 중 여부 (시작 직후 호출되므로 위에서 선언)
+let quietFlush=false;     // 저장 버튼이 직접 기다리는 전송이면 토스트 생략
 let stream=null, lastQuad=null;
 const filterMode="color";      // 스캔 색상: 컬러
 const hiRes=true;         // 촬영 방식: 고화질(아이폰 기본 카메라)
@@ -509,7 +518,7 @@ function showLive(){ $("video").style.display="block"; $("freeze").style.display
 function showFreeze(d){ $("video").style.display="none"; $("camMsg").style.display="none"; $("guide").style.display="none"; $("freeze").src=d; $("freeze").style.display="block"; }
 function updateMainBtn(){
   const b=$("shootBtn");
-  b.textContent = capState==="live" ? "📷 촬영" : "💾 저장 (JPG + PDF)";
+  b.textContent = capState==="live" ? "📷 촬영" : "💾 드라이브에 PDF 저장";
   b.classList.toggle("save", capState!=="live");
   b.disabled=!startReady();
 }
@@ -790,6 +799,7 @@ function runScan(q){
         photos=[{d:d,w:out.width,h:out.height}];
         showFreeze(d); capState="shotDone"; refreshCap();
         if(i>0) toast("기기 여유가 부족해 "+out.width+"px로 저장합니다");
+        else toast("아래 초록 버튼을 눌러야 드라이브에 저장됩니다");
         busy(false);
         return;
       }catch(e){ /* 다음 단계로 */ }
@@ -1016,47 +1026,94 @@ function refreshLinkBadge(){
   }
 }
 
-function doSave(){
+async function doSave(){
   if(!photos.length) return;
-  busy(true,"저장하는 중");
-  setTimeout(()=>{
-    const ph=photos[0];
-    ph.idx=shotIdx; ph.qty=qty;
-    const wantJpg=(saveMode!=="pdf");
-    const hasOrig=(saveMode==="all") && !!origData;
-    const base=fileBase();            // 이 장의 파일명 확정
-    usedNames.add(base);
-    const rec={ ts:new Date().toISOString(), tool:"nameplate_scan", saveMode:saveMode,
-      form:sel.form, cat:sel.cat, model:sel.name, ym:$("ym").value,
-      lotQty:lotTotal, shotIdx:shotIdx, qtyInShot:qty, doneQty:doneQty+qty,
-      pdfName:base+".pdf",
-      fileName:wantJpg?(base+".jpg"):"", originalName:hasOrig?(base+"_orig.jpg"):"",
-      hasOriginal:hasOrig, scanWidth:ph.w, scanHeight:ph.h,
-      filter:filterMode, scan:true, worker:worker,
-      uuid:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()) };
-    let pdf=""; try{ pdf=buildPdfBase64([ph], pdfMeta()); }catch(e){}
-    const send=[];
-    if(wantJpg) send.push(ph);
-    if(hasOrig) send.push({d:origData, w:0, h:0, orig:true});
-    if(endpoint) idbPut({uuid:rec.uuid, rec:rec, photos:send, pdf:pdf, ts:Date.now()}).then(()=>{updatePending();flushOutbox();});
+  busy(true,"PDF 만드는 중");
+  await delay(40);
 
-    lotPhotos.push({d:ph.d,w:ph.w,h:ph.h,idx:ph.idx,qty:ph.qty}); if(lotPhotos.length>60) lotPhotos.shift();
-    recent.unshift(rec); if(recent.length>40) recent.pop();
-    doneQty+=qty; shotIdx++;
-    photos=[]; origData=null; capState="live"; showLive(); renderRecentList();
+  const ph=photos[0];
+  ph.idx=shotIdx; ph.qty=qty;
+  const wantJpg=(saveMode!=="pdf");
+  const hasOrig=(saveMode==="all") && !!origData;
+  const base=fileBase();            // 이 장의 파일명 확정
+  const rec={ ts:new Date().toISOString(), tool:"nameplate_scan", saveMode:saveMode,
+    form:sel.form, cat:sel.cat, model:sel.name, ym:$("ym").value,
+    lotQty:lotTotal, shotIdx:shotIdx, qtyInShot:qty, doneQty:doneQty+qty,
+    pdfName:base+".pdf",
+    fileName:wantJpg?(base+".jpg"):"", originalName:hasOrig?(base+"_orig.jpg"):"",
+    hasOriginal:hasOrig, scanWidth:ph.w, scanHeight:ph.h,
+    filter:filterMode, scan:true, worker:worker,
+    uuid:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()) };
 
-    if(remain()<=0){
-      stopCamera(); refreshCap();
-      $("lotDoneMsg").textContent=sel.name+" · "+lotTotal+"개를 사진 "+(shotIdx-1)+"장에 모두 담았습니다. 통합 PDF도 보내려면 메뉴에서 눌러주세요.";
-      $("lotDoneBox").classList.add("on"); toast("LOT 완료");
-    }else{
-      qty=Math.min(qty, remain()); refreshCap(); startCamera();
-      if(endpoint) toast("전송 대기열에 넣음 · 남은 "+remain()+"개");
-      else toast("드라이브 연결 없음 — 저장되지 않았습니다", true);
-    }
+  // PDF를 못 만들면 여기서 멈춘다 (예전엔 빈 채로 보내서 조용히 실패했음)
+  let pdf="", pdfErr="";
+  try{ pdf=buildPdfBase64([ph], pdfMeta()); }catch(e){ pdfErr=String(e); }
+  if(!pdf || pdf.length<200){
     busy(false);
-  },40);
+    showResult(false,"PDF를 만들지 못했습니다",
+      "사진이 너무 크거나 폰 메모리가 부족했습니다. 다시 찍어주세요.<br><span style='color:var(--muted)'>"+esc_(pdfErr)+"</span>");
+    return;
+  }
+  const mb=(pdf.length*0.75/1048576).toFixed(1);
+
+  if(!endpoint){
+    busy(false);
+    showResult(false,"드라이브 연결 없음","저장 주소가 비어 있어 올리지 않았습니다. ⚙ 설정을 확인해주세요.");
+    return;
+  }
+
+  const send=[];
+  if(wantJpg) send.push(ph);
+  if(hasOrig) send.push({d:origData, w:0, h:0, orig:true});
+  await idbPut({uuid:rec.uuid, rec:rec, photos:send, pdf:pdf, ts:Date.now()});
+
+  // 서버 답을 기다린다 — 성공/실패를 눈으로 확인하게
+  busy(true,"드라이브에 올리는 중 ("+mb+"MB)");
+  lastErr="";
+  await flushNow();
+  const stillQueued=(await idbAll()).some(x=>x.uuid===rec.uuid);
+  busy(false);
+
+  // 전송 성공이든 대기열 보관이든 촬영분은 확보됐으니 다음 장으로 넘어간다
+  usedNames.add(base);
+  lotPhotos.push({d:ph.d,w:ph.w,h:ph.h,idx:ph.idx,qty:ph.qty}); if(lotPhotos.length>60) lotPhotos.shift();
+  recent.unshift(rec); if(recent.length>40) recent.pop();
+  doneQty+=qty; shotIdx++;
+  photos=[]; origData=null; capState="live"; showLive(); renderRecentList();
+  if(remain()>0) qty=Math.min(qty, remain());
+  refreshCap();
+
+  const where="검정명판 › "+sel.name+" › "+(rec.ym||"").slice(0,7);
+  const after = remain()<=0 ? "LOT_DONE" : "";
+  if(!stillQueued){
+    showResult(true,"드라이브 저장 완료",
+      "<b>"+esc_(base)+".pdf</b><br>"+esc_(where)+"<br><span style='color:var(--muted)'>"+mb+"MB · 남은 "+remain()+"개</span>", after);
+  }else{
+    let why=lastErr||"서버 응답이 없습니다";
+    if(/Load failed|Failed to fetch|NetworkError/i.test(why)) why+=" — 네트워크가 끊겼거나 파일("+mb+"MB)이 너무 커서 전송이 중단됐습니다.";
+    showResult(false,"아직 드라이브에 안 올라갔습니다",
+      esc_(why)+"<br><br>찍은 사진은 폰에 보관되어 있고, 연결되면 자동으로 다시 보냅니다. <b>앱을 닫지 마세요.</b>"
+      +"<br><span style='color:var(--muted)'>"+esc_(base)+".pdf · "+mb+"MB</span>", after);
+  }
 }
+async function flushNow(){ while(flushing) await delay(200); quietFlush=true; try{ await flushOutbox(); } finally{ quietFlush=false; } }
+function esc_(t){ return String(t).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+let resultAfter="";
+function showResult(ok,title,html,after){
+  resultAfter=after||"";
+  $("resTitle").textContent=(ok?"✓ ":"⚠ ")+title;
+  $("resTitle").style.color=ok?"var(--ok)":"var(--bad)";
+  $("resBody").innerHTML=html;
+  $("resultBox").classList.add("on");
+}
+$("resOk").onclick=()=>{
+  $("resultBox").classList.remove("on");
+  if(resultAfter==="LOT_DONE"){
+    stopCamera();
+    $("lotDoneMsg").textContent=sel.name+" · "+lotTotal+"개를 사진 "+(shotIdx-1)+"장에 모두 담았습니다.";
+    $("lotDoneBox").classList.add("on");
+  }else if(remain()>0){ startCamera(); }
+};
 $("retakeBtn").onclick=()=>{ photos=[]; capState="live"; showLive(); refreshCap(); startCamera(); };
 
 function sendLotPdf(){
@@ -1115,6 +1172,7 @@ async function flushOutbox(){
     }
   } finally {
     flushing=false; await updatePending();
+    if(quietFlush) return;
     if(sentNow>0) toast("드라이브 저장 완료 "+sentNow+"건"+(pendingCount?(" · 남은 "+pendingCount):""));
     else if(pendingCount>0 && lastErr && Date.now()-lastFailToast>60000){
       lastFailToast=Date.now(); toast("전송 실패 — 상단 배지를 눌러 사유 확인", true);
@@ -1185,7 +1243,7 @@ $("setSave").onclick=()=>{
   if(endpoint) flushOutbox();
 };
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>$(b.dataset.close).classList.remove("on"));
-document.querySelectorAll(".confirm,.sheet").forEach(s=>s.addEventListener("click",e=>{if(e.target===s)s.classList.remove("on");}));
+document.querySelectorAll(".confirm,.sheet").forEach(s=>s.addEventListener("click",e=>{ if(e.target!==s) return; if(s.id==="resultBox") $("resOk").click(); else s.classList.remove("on"); }));
 
 function renderRecentList(){
   const el=$("recentList");
