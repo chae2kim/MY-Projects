@@ -265,6 +265,7 @@
     <input type="text" id="worker" placeholder="작업자 이름 (선택)">
     <button class="bigbtn" id="testConn" style="background:var(--panel2);color:var(--blue);border:1px solid var(--line);padding:13px;font-size:14px;margin-bottom:10px">연결 테스트</button>
     <div id="connResult" style="font-size:12px;line-height:1.6;color:var(--sub);word-break:break-all;margin-bottom:10px"></div>
+    <button class="bigbtn" id="clearBig" style="display:none;background:#fde6e9;color:var(--bad);border:1px solid #f3b6bf;padding:13px;font-size:14px;margin-bottom:10px"></button>
     <div class="rh">이번 세션 기록</div>
     <div id="recentList"><div class="empty-note">아직 없음</div></div>
     <button class="bigbtn" id="setSave" style="margin-top:12px">저장</button>
@@ -783,6 +784,34 @@ function comps(g,W,H,t,bright){
 }
 
 /* ─────────── 원근 보정 + 스캔 필터 ─────────── */
+/* ─────────── 전송 용량 맞추기 ───────────
+   Apps Script가 한 번에 받을 수 있는 크기에 여유를 두고 맞춘다.
+   화질 → 해상도 순서로 조금씩 낮추고, 글자가 뭉개질 만큼은 내리지 않는다. */
+const UPLOAD_MAX_BYTES = 2.6*1048576;     // JPEG 한 장 기준 (PDF도 거의 같은 크기)
+function jpegBytes(d){ return Math.round((d.length - d.indexOf(",") - 1)*0.75); }
+function scaleCanvas(src,k){
+  const c=document.createElement("canvas");
+  c.width=Math.max(32,Math.round(src.width*k)); c.height=Math.max(32,Math.round(src.height*k));
+  const g=c.getContext("2d"); g.imageSmoothingEnabled=true; g.imageSmoothingQuality="high";
+  g.drawImage(src,0,0,c.width,c.height); return c;
+}
+function encodeForUpload(cv,maxBytes){
+  let cur=cv, q=0.92, d="";
+  for(let step=0; step<10; step++){
+    d=cur.toDataURL("image/jpeg",q);
+    if(jpegBytes(d)<=maxBytes || Math.max(cur.width,cur.height)<=1600) break;
+    if(q>0.8) q=Math.round((q-0.04)*100)/100;           // 0.92 → 0.88 → 0.84 → 0.80
+    else { const k=0.85; const nx=scaleCanvas(cur,k); if(cur!==cv) cur.width=0; cur=nx; q=0.88; }
+  }
+  return {d:d, w:cur.width, h:cur.height, cv:cur};
+}
+function makeLotCopy(cv){
+  const k=Math.min(1, 1400/Math.max(cv.width,cv.height));
+  const c=k<1?scaleCanvas(cv,k):cv;
+  const d=c.toDataURL("image/jpeg",0.8);
+  const r={d:d,w:c.width,h:c.height}; if(c!==cv) c.width=0;
+  return r;
+}
 function runScan(q){
   busy(true,"보정하는 중");
   setTimeout(()=>{
@@ -792,13 +821,15 @@ function runScan(q){
       try{
         const out=warp($("src"), q, caps[i]);
         applyScanFilter(out, filterMode);
-        const d=out.toDataURL("image/jpeg",0.98);
+        const enc=encodeForUpload(out, UPLOAD_MAX_BYTES);
+        const lotD=makeLotCopy(enc.cv);           // 통합 PDF용 가벼운 사본
+        const d=enc.d;
         lastQuad=quadToRatio(q);
         try{localStorage.setItem("np_quad",JSON.stringify(lastQuad));}catch(e){}
         show("scCap");
-        photos=[{d:d,w:out.width,h:out.height}];
+        photos=[{d:d,w:enc.w,h:enc.h,lotD:lotD.d,lotW:lotD.w,lotH:lotD.h}];
         showFreeze(d); capState="shotDone"; refreshCap();
-        if(i>0) toast("기기 여유가 부족해 "+out.width+"px로 저장합니다");
+        if(i>0) toast("기기 여유가 부족해 "+enc.w+"px로 저장합니다");
         else toast("아래 초록 버튼을 눌러야 드라이브에 저장됩니다");
         busy(false);
         return;
@@ -913,7 +944,7 @@ function applyScanFilter(cv,mode){
     }
   }
   ctx.putImageData(im,0,0);
-  unsharp(cv, mode==="color"?0.3:0.22);
+  unsharp(cv, mode==="color"?0.15:0.22);
 }
 /* 원근 보정으로 무뎌진 가장자리를 되살린다. 원본 세 줄만 들고 돌려서
    고해상도에서도 화면 전체 복사본을 만들지 않는다. */
@@ -1076,7 +1107,7 @@ async function doSave(){
 
   // 전송 성공이든 대기열 보관이든 촬영분은 확보됐으니 다음 장으로 넘어간다
   usedNames.add(base);
-  lotPhotos.push({d:ph.d,w:ph.w,h:ph.h,idx:ph.idx,qty:ph.qty}); if(lotPhotos.length>60) lotPhotos.shift();
+  lotPhotos.push({d:ph.lotD||ph.d,w:ph.lotW||ph.w,h:ph.lotH||ph.h,idx:ph.idx,qty:ph.qty}); if(lotPhotos.length>60) lotPhotos.shift();
   recent.unshift(rec); if(recent.length>40) recent.pop();
   doneQty+=qty; shotIdx++;
   photos=[]; origData=null; capState="live"; showLive(); renderRecentList();
@@ -1145,6 +1176,7 @@ async function flushOutbox(){
   try{
     const all=await idbAll();
     for(const item of all){
+      if(item.tooBig) continue;
       const fd=new FormData(); fd.append("payload",JSON.stringify(item.rec));
       (item.photos||[]).forEach((p,i)=>fd.append("photo"+(i+1), p.d));
       if(item.pdf) fd.append("pdf", item.pdf);
@@ -1168,7 +1200,10 @@ async function flushOutbox(){
             : "JSON이 아닌 응답 (HTTP "+r.status+")";
         }
       }catch(e){ ok=false; lastErr="요청 실패: "+String(e); }
-      if(ok){ await idbDelete(item.uuid); sentNow++; lastErr=""; } else break;
+      if(ok){ await idbDelete(item.uuid); sentNow++; lastErr=""; }
+      else if((item.pdf||"").length > 5*1048576) {               // 용량 초과 → 다시 시도해도 안 됨
+        item.tooBig=true; await idbPut(item); continue; }
+      else break;                                                 // 작은 것도 실패면 네트워크 문제 → 다음 기회에
     }
   } finally {
     flushing=false; await updatePending();
@@ -1221,7 +1256,20 @@ $("testConn").onclick=async ()=>{
       +"<br>주소 오타, 네트워크, 또는 배포가 삭제된 경우입니다.","var(--bad)");
   }
 };
+async function refreshClearBig(){
+  const big=(await idbAll()).filter(x=>x.tooBig);
+  const b=$("clearBig");
+  if(big.length){ b.style.display="block"; b.textContent="용량이 커서 못 올린 "+big.length+"건 지우기 (다시 찍어주세요)"; }
+  else b.style.display="none";
+}
+$("clearBig").onclick=async ()=>{
+  const big=(await idbAll()).filter(x=>x.tooBig);
+  for(const x of big) await idbDelete(x.uuid);
+  await updatePending(); await refreshClearBig();
+  connSay(big.length+"건을 지웠습니다. 해당 장은 다시 찍어서 저장해주세요.","var(--sub)");
+};
 function openSettings(){
+  refreshClearBig();
   $("endpoint").value=endpoint; $("worker").value=worker; renderRecentList();
   if(pendingCount>0 && lastErr) connSay("미전송 "+pendingCount+"건<br>마지막 실패 사유: "+lastErr,"var(--bad)");
   else connSay("");
