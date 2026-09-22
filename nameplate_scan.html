@@ -1101,7 +1101,10 @@ async function doSave(){
   // 서버 답을 기다린다 — 성공/실패를 눈으로 확인하게
   busy(true,"드라이브에 올리는 중 ("+mb+"MB)");
   lastErr="";
-  await flushNow();
+  uploadProgress=(a,b,merging)=>{ $("busyTxt").textContent = merging
+      ? "드라이브에서 합치는 중…"
+      : "드라이브에 올리는 중 "+a+" / "+b+"  ("+mb+"MB)"; };
+  try{ await flushNow(); } finally { uploadProgress=null; }
   const stillQueued=(await idbAll()).some(x=>x.uuid===rec.uuid);
   busy(false);
 
@@ -1120,10 +1123,9 @@ async function doSave(){
     showResult(true,"드라이브 저장 완료",
       "<b>"+esc_(base)+".pdf</b><br>"+esc_(where)+"<br><span style='color:var(--muted)'>"+mb+"MB · 남은 "+remain()+"개</span>", after);
   }else{
-    let why=lastErr||"서버 응답이 없습니다";
-    if(/Load failed|Failed to fetch|NetworkError/i.test(why)) why+=" — 네트워크가 끊겼거나 파일("+mb+"MB)이 너무 커서 전송이 중단됐습니다.";
+    const why=lastErr||"서버 응답이 없습니다";
     showResult(false,"아직 드라이브에 안 올라갔습니다",
-      esc_(why)+"<br><br>찍은 사진은 폰에 보관되어 있고, 연결되면 자동으로 다시 보냅니다. <b>앱을 닫지 마세요.</b>"
+      esc_(why)+"<br><br>찍은 사진은 폰에 보관되어 있고, 받은 조각 다음부터 자동으로 이어서 보냅니다. <b>앱을 닫지 마세요.</b>"
       +"<br><span style='color:var(--muted)'>"+esc_(base)+".pdf · "+mb+"MB</span>", after);
   }
 }
@@ -1169,6 +1171,64 @@ function sendLotPdf(){
 $("lotPdfBtn").onclick=sendLotPdf;
 $("menuPdf").onclick=()=>{ $("menuSheet").classList.remove("on"); sendLotPdf(); };
 
+/* ─────────── 조각 전송 ───────────
+   PDF를 한 번에 보내면 카카오톡 브라우저·LTE에서 끊긴다. 작은 조각으로 나눠
+   차례로 보내고, 서버가 합쳐서 저장한다. 끊기면 받은 조각 다음부터 이어 보낸다. */
+const CHUNK_CHARS = 256*1024;      // 조각 하나 약 0.25MB (연결 테스트처럼 가벼움)
+let uploadProgress=null;           // 저장 버튼이 진행 상황을 화면에 보여줄 때 씀
+
+class SendError extends Error {}
+async function postForm(fd){
+  let r, txt;
+  try{
+    r=await fetch(endpoint,{method:"POST",body:fd,redirect:"follow"});
+    txt=await r.text();
+  }catch(e){ throw new SendError("NET"); }
+  let j=null; try{ j=JSON.parse(txt); }catch(_){}
+  if(!j){
+    if(/accounts\.google\.com|Sign in/i.test(txt))
+      throw new SendError("로그인 화면이 돌아왔습니다. 배포 액세스 권한을 '모든 사용자'로 바꾸고 새 배포를 만드세요.");
+    throw new SendError("JSON이 아닌 응답 (HTTP "+r.status+")");
+  }
+  if(j.scan!==true) throw new SendError("서버에 스캔 저장 블록이 없습니다. Code.gs를 교체하고 '새 버전'으로 배포하세요.");
+  return j;
+}
+async function sendItem(item){
+  const pdf=item.pdf||"";
+  const b64=pdf.slice(pdf.indexOf(",")+1);
+  const n=Math.max(1, Math.ceil(b64.length/CHUNK_CHARS));
+  item.sent=item.sent||[];
+  for(let k=0;k<n;k++){
+    if(item.sent.indexOf(k)>=0) continue;
+    if(uploadProgress) uploadProgress(k+1,n);
+    const fd=new FormData();
+    fd.append("payload",JSON.stringify({tool:"nameplate_scan",action:"chunk",uuid:item.rec.uuid,idx:k,total:n}));
+    fd.append("part", b64.slice(k*CHUNK_CHARS,(k+1)*CHUNK_CHARS));
+    let j;
+    try{ j=await postForm(fd); }
+    catch(e){ if(e.message==="NET") e.message="NET:"+item.sent.length+"/"+n; throw e; }
+    if(!j.ok) throw new SendError("조각 저장 실패: "+(j.error||""));
+    item.sent.push(k); await idbPut(item);          // 여기까지 받은 건 기억 → 끊겨도 이어서
+  }
+  if(uploadProgress) uploadProgress(n,n,true);
+  const fd=new FormData();
+  fd.append("payload",JSON.stringify(Object.assign({},item.rec,{action:"commit",total:n})));
+  let j;
+  try{ j=await postForm(fd); }catch(e){ if(e.message==="NET") e.message="NET:"+n+"/"+n; throw e; }
+  if(j.ok||j.duplicated) return true;
+  if(j.missing==="all"){ item.sent=[]; await idbPut(item); }
+  else if(Array.isArray(j.missing)){ item.sent=item.sent.filter(x=>j.missing.indexOf(x)<0); await idbPut(item); }
+  throw new SendError("서버에서 합치기 실패: "+(j.error||""));
+}
+function describeSendError(e){
+  const m=String(e&&e.message||e);
+  if(m.indexOf("NET")===0){
+    const prog=m.split(":")[1]||"";
+    return "네트워크가 끊겼습니다"+(prog?(" ("+prog+" 조각까지 전송됨)"):"")+". 연결되면 이어서 보냅니다.";
+  }
+  return m;
+}
+
 async function flushOutbox(){
   if(!endpoint||flushing) return;
   flushing=true;
@@ -1176,34 +1236,13 @@ async function flushOutbox(){
   try{
     const all=await idbAll();
     for(const item of all){
-      if(item.tooBig) continue;
-      const fd=new FormData(); fd.append("payload",JSON.stringify(item.rec));
-      (item.photos||[]).forEach((p,i)=>fd.append("photo"+(i+1), p.d));
-      if(item.pdf) fd.append("pdf", item.pdf);
-      let ok=false;
       try{
-        const r=await fetch(endpoint,{method:"POST",body:fd,redirect:"follow"});
-        const txt=await r.text();
-        try{
-          const j=JSON.parse(txt);
-          if(j.scan!==true){
-            ok=false;
-            lastErr="서버에 스캔 저장 블록이 없습니다. Code.gs에 블록을 추가하고 '새 버전'으로 배포하세요.";
-          }else{
-            ok=(j.ok===true)||(j.duplicated===true);
-            if(!ok) lastErr="스크립트 응답: "+(j.error||txt).substring(0,200);
-          }
-        }catch(_){
-          ok=false;
-          lastErr=/accounts\.google\.com|Sign in/i.test(txt)
-            ? "로그인 화면이 돌아왔습니다. 배포 액세스 권한을 '모든 사용자'로 바꾸고 새 배포를 만드세요."
-            : "JSON이 아닌 응답 (HTTP "+r.status+")";
-        }
-      }catch(e){ ok=false; lastErr="요청 실패: "+String(e); }
-      if(ok){ await idbDelete(item.uuid); sentNow++; lastErr=""; }
-      else if((item.pdf||"").length > 5*1048576) {               // 용량 초과 → 다시 시도해도 안 됨
-        item.tooBig=true; await idbPut(item); continue; }
-      else break;                                                 // 작은 것도 실패면 네트워크 문제 → 다음 기회에
+        await sendItem(item);
+        await idbDelete(item.uuid); sentNow++; lastErr="";
+      }catch(e){
+        lastErr=describeSendError(e);
+        break;                                      // 다음 기회에 이어서
+      }
     }
   } finally {
     flushing=false; await updatePending();
