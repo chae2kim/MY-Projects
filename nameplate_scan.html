@@ -185,7 +185,10 @@
       </div>
     </div>
   </div>
-  <div class="botbar"><button class="bigbtn" id="startBtn" disabled>작업 시작</button></div>
+  <div class="botbar">
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:8px" id="verTag"></div>
+    <button class="bigbtn" id="startBtn" disabled>작업 시작</button>
+  </div>
 </div>
 
 <!-- ══ 2. 촬영 ══ -->
@@ -321,6 +324,7 @@ const MODELS=[
 ].map(m=>({form:m[0],cat:m[1],name:m[2],prefix:m[3]}));
 const CATS=[...new Set(MODELS.map(m=>m.cat))];
 
+const APP_VER = "v6 (2026-09-22)";
 const $=id=>document.getElementById(id);
 let sel=null, activeCat=null;
 const fastMode=false;          // 영역 보정: 매번 확인
@@ -352,6 +356,7 @@ try{
 (function(){
   const d=new Date(); $("ym").value=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
   renderChips(); renderDD(); refreshStart();
+  $("verTag").textContent="버전 "+APP_VER;
   if(window.indexedDB){ updatePending(); flushOutbox(); }
   $("video").addEventListener("click", tapFocus_);
 })();
@@ -787,7 +792,7 @@ function comps(g,W,H,t,bright){
 /* ─────────── 전송 용량 맞추기 ───────────
    Apps Script가 한 번에 받을 수 있는 크기에 여유를 두고 맞춘다.
    화질 → 해상도 순서로 조금씩 낮추고, 글자가 뭉개질 만큼은 내리지 않는다. */
-const UPLOAD_MAX_BYTES = 2.6*1048576;     // JPEG 한 장 기준 (PDF도 거의 같은 크기)
+const UPLOAD_MAX_BYTES = 380*1024;        // 전송 약 0.5MB — 기존 nameplate 앱과 같은 수준
 function jpegBytes(d){ return Math.round((d.length - d.indexOf(",") - 1)*0.75); }
 function scaleCanvas(src,k){
   const c=document.createElement("canvas");
@@ -796,10 +801,10 @@ function scaleCanvas(src,k){
   g.drawImage(src,0,0,c.width,c.height); return c;
 }
 function encodeForUpload(cv,maxBytes){
-  let cur=cv, q=0.92, d="";
+  let cur=cv, q=0.90, d="";
   for(let step=0; step<10; step++){
     d=cur.toDataURL("image/jpeg",q);
-    if(jpegBytes(d)<=maxBytes || Math.max(cur.width,cur.height)<=1600) break;
+    if(jpegBytes(d)<=maxBytes || Math.max(cur.width,cur.height)<=1400) break;
     if(q>0.8) q=Math.round((q-0.04)*100)/100;           // 0.92 → 0.88 → 0.84 → 0.80
     else { const k=0.85; const nx=scaleCanvas(cur,k); if(cur!==cv) cur.width=0; cur=nx; q=0.88; }
   }
@@ -816,7 +821,7 @@ function runScan(q){
   busy(true,"보정하는 중");
   setTimeout(()=>{
     // 원본 크기 그대로 시도하고, 기기 메모리가 못 버티면 단계적으로 낮춘다
-    const caps=[4096, 3000, 2200];
+    const caps=[2600, 2000, 1500];
     for(let i=0;i<caps.length;i++){
       try{
         const out=warp($("src"), q, caps[i]);
@@ -1101,9 +1106,10 @@ async function doSave(){
   // 서버 답을 기다린다 — 성공/실패를 눈으로 확인하게
   busy(true,"드라이브에 올리는 중 ("+mb+"MB)");
   lastErr="";
-  uploadProgress=(a,b,merging)=>{ $("busyTxt").textContent = merging
-      ? "드라이브에서 합치는 중…"
-      : "드라이브에 올리는 중 "+a+" / "+b+"  ("+mb+"MB)"; };
+  uploadProgress=(a,b,merging,split)=>{ $("busyTxt").textContent = split
+      ? "한 번에 안 올라가서 나눠 보내는 중…"
+      : (merging ? "드라이브에서 합치는 중…"
+                 : "드라이브에 올리는 중 "+a+" / "+b+"  ("+mb+"MB)"); };
   try{ await flushNow(); } finally { uploadProgress=null; }
   const stillQueued=(await idbAll()).some(x=>x.uuid===rec.uuid);
   busy(false);
@@ -1194,6 +1200,25 @@ async function postForm(fd){
   return j;
 }
 async function sendItem(item){
+  // ① 예전에 쓰던 방식 그대로 한 번에 (지금 크기면 이걸로 충분)
+  if(!item.sent || !item.sent.length){
+    try{
+      const fd=new FormData();
+      fd.append("payload",JSON.stringify(item.rec));
+      if(item.pdf) fd.append("pdf",item.pdf);
+      (item.photos||[]).forEach((p,i)=>fd.append("photo"+(i+1), p.d));
+      const j=await postForm(fd);
+      if(j.ok||j.duplicated) return true;
+      throw new SendError("스크립트 응답: "+(j.error||""));
+    }catch(e){
+      if(!(e instanceof SendError) || e.message!=="NET") throw e;   // 네트워크 문제일 때만 ② 로
+      if(uploadProgress) uploadProgress(0,0,false,true);
+    }
+  }
+  // ② 끊기면 조각으로 나눠서 (카카오톡 브라우저·약한 신호 대비)
+  return await sendChunked(item);
+}
+async function sendChunked(item){
   const pdf=item.pdf||"";
   const b64=pdf.slice(pdf.indexOf(",")+1);
   const n=Math.max(1, Math.ceil(b64.length/CHUNK_CHARS));
