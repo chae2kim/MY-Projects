@@ -283,14 +283,6 @@
   </div>
 </div>
 
-<div class="confirm" id="resultBox">
-  <div class="box">
-    <h4 id="resTitle"></h4>
-    <p id="resBody" style="word-break:break-all"></p>
-    <div class="cacts"><button class="pri" id="resOk">확인</button></div>
-  </div>
-</div>
-
 <div class="confirm" id="lotDoneBox">
   <div class="box">
     <h4>LOT 촬영 완료</h4>
@@ -301,6 +293,7 @@
 
 <div class="busy" id="busy"><div class="spin"></div><div id="busyTxt">보정하는 중</div></div>
 <div class="toast" id="toast"></div>
+<iframe name="upFrame" id="upFrame" style="display:none;width:0;height:0;border:0"></iframe>
 <canvas id="cv"></canvas>
 <canvas id="src"></canvas>
 
@@ -324,14 +317,14 @@ const MODELS=[
 ].map(m=>({form:m[0],cat:m[1],name:m[2],prefix:m[3]}));
 const CATS=[...new Set(MODELS.map(m=>m.cat))];
 
-const APP_VER = "v6 (2026-09-22)";
+const APP_VER = "v8 (2026-09-22)";
 const $=id=>document.getElementById(id);
 let sel=null, activeCat=null;
 const fastMode=false;          // 영역 보정: 매번 확인
 let lotTotal=0, doneQty=0, shotIdx=1, qty=1;   // 총 개수 · 담은 개수 · 몇 번째 장 · 이번 장 개수
 let photos=[];            // 이번 장 (1개)
 let lotPhotos=[];         // 이번 LOT 전체 (통합 PDF용)
-const DEFAULT_ENDPOINT="https://script.google.com/macros/s/AKfycbyjs47ayp6YQp94p0q06vPIjok-LmBGI5_IhKQWeG4H-N2GJ7SP0E2oDF_agdGeqYTp/exec"; // 검정명판 Code.gs
+const DEFAULT_ENDPOINT="https://script.google.com/macros/s/AKfycbzqGzm2uMc2CNwzt2sYfc9a4MypPyN9t_Wwe1RAbmyykA5GpLVE1BTF1ZOk2usu6Zie6A/exec"; // 스캔 전용 백엔드
 let endpoint=DEFAULT_ENDPOINT;
 let worker="";
 let pendingCount=0, recent=[];
@@ -348,7 +341,7 @@ let capState="live";      // live | shotDone
 
 try{
   const lq=localStorage.getItem("np_quad"); if(lq) lastQuad=JSON.parse(lq);
-  const se=localStorage.getItem("np_scan_endpoint"); endpoint=(se&&se.trim())?se.trim():DEFAULT_ENDPOINT;
+  const se=localStorage.getItem("np_scan_endpoint_v8"); endpoint=(se&&se.trim())?se.trim():DEFAULT_ENDPOINT;
   worker=localStorage.getItem("np_scan_worker")||"";
 }catch(e){}
 
@@ -1106,10 +1099,11 @@ async function doSave(){
   // 서버 답을 기다린다 — 성공/실패를 눈으로 확인하게
   busy(true,"드라이브에 올리는 중 ("+mb+"MB)");
   lastErr="";
-  uploadProgress=(a,b,merging,split)=>{ $("busyTxt").textContent = split
-      ? "한 번에 안 올라가서 나눠 보내는 중…"
-      : (merging ? "드라이브에서 합치는 중…"
-                 : "드라이브에 올리는 중 "+a+" / "+b+"  ("+mb+"MB)"); };
+  uploadProgress=(a,b,merging,split,sending)=>{ $("busyTxt").textContent =
+      sending ? "드라이브에 올리는 중 ("+mb+"MB)"
+    : split   ? "다시 시도하는 중…"
+    : merging ? "드라이브에서 합치는 중…"
+              : "나눠 보내는 중 "+a+" / "+b; };
   try{ await flushNow(); } finally { uploadProgress=null; }
   const stillQueued=(await idbAll()).some(x=>x.uuid===rec.uuid);
   busy(false);
@@ -1137,22 +1131,17 @@ async function doSave(){
 }
 async function flushNow(){ while(flushing) await delay(200); quietFlush=true; try{ await flushOutbox(); } finally{ quietFlush=false; } }
 function esc_(t){ return String(t).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
-let resultAfter="";
+/* 팝업 없이 알림 한 줄로만 알린다. 실패해도 작업 흐름을 막지 않음 */
 function showResult(ok,title,html,after){
-  resultAfter=after||"";
-  $("resTitle").textContent=(ok?"✓ ":"⚠ ")+title;
-  $("resTitle").style.color=ok?"var(--ok)":"var(--bad)";
-  $("resBody").innerHTML=html;
-  $("resultBox").classList.add("on");
-}
-$("resOk").onclick=()=>{
-  $("resultBox").classList.remove("on");
-  if(resultAfter==="LOT_DONE"){
+  const plain=String(html).replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
+  if(ok) toast("✓ "+title);
+  else { if(!lastErr) lastErr=plain; toast("아직 전송 중 — 계속 찍으셔도 됩니다"); }
+  if(after==="LOT_DONE"){
     stopCamera();
     $("lotDoneMsg").textContent=sel.name+" · "+lotTotal+"개를 사진 "+(shotIdx-1)+"장에 모두 담았습니다.";
     $("lotDoneBox").classList.add("on");
   }else if(remain()>0){ startCamera(); }
-};
+}
 $("retakeBtn").onclick=()=>{ photos=[]; capState="live"; showLive(); refreshCap(); startCamera(); };
 
 function sendLotPdf(){
@@ -1182,6 +1171,7 @@ $("menuPdf").onclick=()=>{ $("menuSheet").classList.remove("on"); sendLotPdf(); 
    차례로 보내고, 서버가 합쳐서 저장한다. 끊기면 받은 조각 다음부터 이어 보낸다. */
 const CHUNK_CHARS = 256*1024;      // 조각 하나 약 0.25MB (연결 테스트처럼 가벼움)
 let uploadProgress=null;           // 저장 버튼이 진행 상황을 화면에 보여줄 때 씀
+let formWorks=true;                // form 전송이 통하는 환경인지 (안 되면 바로 조각 전송)
 
 class SendError extends Error {}
 async function postForm(fd){
@@ -1199,21 +1189,48 @@ async function postForm(fd){
   if(j.scan!==true) throw new SendError("서버에 스캔 저장 블록이 없습니다. Code.gs를 교체하고 '새 버전'으로 배포하세요.");
   return j;
 }
+/* 일반 웹사이트가 파일 올릴 때 쓰는 form 전송.
+   fetch 와 달리 브라우저가 알아서 처리해 인앱 브라우저에서도 잘 통과한다.
+   응답은 읽을 수 없으므로, 보낸 뒤 서버에 "들어왔니?" 하고 따로 물어본다. */
+function formUpload(item){
+  return new Promise((resolve,reject)=>{
+    const fr=$("upFrame"); if(!fr) return reject(new SendError("NOFRAME"));
+    const f=document.createElement("form");
+    f.method="POST"; f.action=endpoint; f.target="upFrame";
+    f.enctype="multipart/form-data"; f.acceptCharset="utf-8"; f.style.display="none";
+    const add=(n,v)=>{ const t=document.createElement("textarea"); t.name=n; t.value=v; f.appendChild(t); };
+    add("payload", JSON.stringify(item.rec));
+    if(item.pdf) add("pdf", item.pdf);
+    (item.photos||[]).forEach((p,i)=>add("photo"+(i+1), p.d));
+    let done=false;
+    const finish=(fn,arg)=>{ if(done)return; done=true;
+      clearTimeout(timer); fr.removeEventListener("load",onload);
+      try{ f.remove(); }catch(e){} fn(arg); };
+    const onload=()=>finish(resolve,true);
+    const timer=setTimeout(()=>finish(reject,new SendError("NET")), 150000);
+    fr.addEventListener("load",onload);
+    document.body.appendChild(f);
+    try{ f.submit(); }catch(e){ finish(reject,new SendError("NET")); }
+  });
+}
+async function verifySaved(rec){
+  const fd=new FormData();
+  fd.append("payload",JSON.stringify({tool:"nameplate_scan",action:"check",
+    uuid:rec.uuid, model:rec.model, ym:rec.ym, pdfName:rec.pdfName}));
+  const j=await postForm(fd);
+  return !!j.found;
+}
 async function sendItem(item){
-  // ① 예전에 쓰던 방식 그대로 한 번에 (지금 크기면 이걸로 충분)
-  if(!item.sent || !item.sent.length){
-    try{
-      const fd=new FormData();
-      fd.append("payload",JSON.stringify(item.rec));
-      if(item.pdf) fd.append("pdf",item.pdf);
-      (item.photos||[]).forEach((p,i)=>fd.append("photo"+(i+1), p.d));
-      const j=await postForm(fd);
-      if(j.ok||j.duplicated) return true;
-      throw new SendError("스크립트 응답: "+(j.error||""));
-    }catch(e){
-      if(!(e instanceof SendError) || e.message!=="NET") throw e;   // 네트워크 문제일 때만 ② 로
-      if(uploadProgress) uploadProgress(0,0,false,true);
+  // ① form 전송 후 도착 확인
+  if(formWorks && (!item.sent || !item.sent.length)){
+    if(uploadProgress) uploadProgress(0,0,false,false,true);
+    formUpload(item).catch(()=>{});          // 응답을 못 읽으므로 기다리지 않고
+    for(let t=0;t<12;t++){                   // 서버에 직접 물어본다 (최대 약 40초)
+      await delay(t<2?1500:3500);
+      try{ if(await verifySaved(item.rec)) return true; }catch(e){}
     }
+    formWorks=false;                       // 이 기기/브라우저에선 안 되는구나 → 다음부터 바로 조각 전송
+    if(uploadProgress) uploadProgress(0,0,false,true);
   }
   // ② 끊기면 조각으로 나눠서 (카카오톡 브라우저·약한 신호 대비)
   return await sendChunked(item);
@@ -1349,13 +1366,13 @@ $("menuReset").onclick=()=>{ $("menuSheet").classList.remove("on"); stopCamera()
 $("lotNext").onclick=()=>{ $("lotDoneBox").classList.remove("on"); stopCamera(); $("lotQty").value=""; show("scSetup"); refreshStart(); };
 $("setSave").onclick=()=>{
   endpoint=$("endpoint").value.trim(); worker=$("worker").value.trim();
-  try{ localStorage.setItem("np_scan_endpoint",endpoint); localStorage.setItem("np_scan_worker",worker); }catch(e){}
+  try{ localStorage.setItem("np_scan_endpoint_v8",endpoint); localStorage.setItem("np_scan_worker",worker); }catch(e){}
   $("setSheet").classList.remove("on"); refreshLinkBadge();
   toast(endpoint?"저장 연결됨 · 이 기기에 기억합니다":"주소가 비어 있어 드라이브에 저장되지 않습니다", !endpoint);
   if(endpoint) flushOutbox();
 };
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>$(b.dataset.close).classList.remove("on"));
-document.querySelectorAll(".confirm,.sheet").forEach(s=>s.addEventListener("click",e=>{ if(e.target!==s) return; if(s.id==="resultBox") $("resOk").click(); else s.classList.remove("on"); }));
+document.querySelectorAll(".confirm,.sheet").forEach(s=>s.addEventListener("click",e=>{ if(e.target===s) s.classList.remove("on"); }));
 
 function renderRecentList(){
   const el=$("recentList");
