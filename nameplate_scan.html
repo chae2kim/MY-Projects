@@ -317,7 +317,7 @@ const MODELS=[
 ].map(m=>({form:m[0],cat:m[1],name:m[2],prefix:m[3]}));
 const CATS=[...new Set(MODELS.map(m=>m.cat))];
 
-const APP_VER = "v8 (2026-09-22)";
+const APP_VER = "v12 (2026-10-01)";
 const $=id=>document.getElementById(id);
 let sel=null, activeCat=null;
 const fastMode=false;          // 영역 보정: 매번 확인
@@ -350,7 +350,7 @@ try{
   const d=new Date(); $("ym").value=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
   renderChips(); renderDD(); refreshStart();
   $("verTag").textContent="버전 "+APP_VER;
-  if(window.indexedDB){ updatePending(); flushOutbox(); }
+  if(window.indexedDB){ retryStuck().then(()=>{ updatePending(); flushOutbox(); }); }
   $("video").addEventListener("click", tapFocus_);
 })();
 
@@ -996,7 +996,7 @@ function buildPdfBase64(items, meta){
 
     const lines=[
       "MODEL   "+ascii(meta.model)+"        TYPE  "+ascii(meta.form),
-      "MFG     "+ascii(meta.ym)+"           DATE  "+ascii(meta.dateStr)+(meta.worker?("        BY  "+ascii(meta.worker)):""),
+      "YYYY-MM  "+ascii(meta.ym)+"        SCAN DATE  "+ascii(meta.dateStr)+(meta.worker?("     BY  "+ascii(meta.worker)):""),
       "SHEET   "+(it.idx||(i+1))+(n>1?(" of "+n):"")+"          NAMEPLATES  "+(it.qty||"-")+
         (meta.lotTotal?("   (LOT "+meta.lotTotal+")"):"")
     ];
@@ -1044,6 +1044,13 @@ function db(){return new Promise((res,rej)=>{ if(_db)return res(_db);
 function idbPut(it){return db().then(d=>new Promise((res,rej)=>{const t=d.transaction("outbox","readwrite");t.objectStore("outbox").put(it);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);})).catch(()=>{});}
 function idbDelete(u){return db().then(d=>new Promise(res=>{const t=d.transaction("outbox","readwrite");t.objectStore("outbox").delete(u);t.oncomplete=()=>res();t.onerror=()=>res();})).catch(()=>{});}
 function idbAll(){return db().then(d=>new Promise(res=>{const t=d.transaction("outbox","readonly");const q=t.objectStore("outbox").getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([]);})).catch(()=>[]);}
+/* 전송 방식이 바뀌었으니, 예전에 포기 표시된 항목도 한 번 더 시도한다 */
+async function retryStuck(){
+  try{
+    const all=await idbAll();
+    for(const it of all){ if(it.tooBig){ delete it.tooBig; it.sent=[]; await idbPut(it); } }
+  }catch(e){}
+}
 function updatePending(){ return idbAll().then(a=>{ pendingCount=a.length; refreshLinkBadge(); }); }
 /* 상단 배지: 주소가 없으면 빨간 경고, 있으면 미전송 개수 */
 function refreshLinkBadge(){
@@ -1338,16 +1345,28 @@ $("testConn").onclick=async ()=>{
   }
 };
 async function refreshClearBig(){
-  const big=(await idbAll()).filter(x=>x.tooBig);
+  const all=await idbAll();
   const b=$("clearBig");
-  if(big.length){ b.style.display="block"; b.textContent="용량이 커서 못 올린 "+big.length+"건 지우기 (다시 찍어주세요)"; }
-  else b.style.display="none";
+  if(all.length){
+    b.style.display="block";
+    b.textContent="미전송 "+all.length+"건 모두 지우기";
+    b.dataset.n=all.length;
+  } else b.style.display="none";
 }
+let clearArmed=false;
 $("clearBig").onclick=async ()=>{
-  const big=(await idbAll()).filter(x=>x.tooBig);
-  for(const x of big) await idbDelete(x.uuid);
+  const all=await idbAll();
+  if(!all.length){ await refreshClearBig(); return; }
+  if(!clearArmed){
+    clearArmed=true;
+    $("clearBig").textContent="정말 지울까요? 한 번 더 누르기 ("+all.length+"건)";
+    setTimeout(()=>{ clearArmed=false; refreshClearBig(); }, 5000);
+    return;
+  }
+  clearArmed=false;
+  for(const x of all) await idbDelete(x.uuid);
   await updatePending(); await refreshClearBig();
-  connSay(big.length+"건을 지웠습니다. 해당 장은 다시 찍어서 저장해주세요.","var(--sub)");
+  connSay(all.length+"건을 지웠습니다. 필요한 장은 다시 찍어주세요.","var(--sub)");
 };
 function openSettings(){
   refreshClearBig();
