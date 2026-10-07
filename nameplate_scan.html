@@ -317,7 +317,7 @@ const MODELS=[
 ].map(m=>({form:m[0],cat:m[1],name:m[2],prefix:m[3]}));
 const CATS=[...new Set(MODELS.map(m=>m.cat))];
 
-const APP_VER = "v12 (2026-10-01)";
+const APP_VER = "v17 (2026-10-07)";
 const $=id=>document.getElementById(id);
 let sel=null, activeCat=null;
 const fastMode=false;          // 영역 보정: 매번 확인
@@ -794,14 +794,16 @@ function scaleCanvas(src,k){
   g.drawImage(src,0,0,c.width,c.height); return c;
 }
 function encodeForUpload(cv,maxBytes){
-  let cur=cv, q=0.90, d="";
+  let cur=cv, q=0.90;
+  let d=cur.toDataURL("image/jpeg",q), uw=cur.width, uh=cur.height;
   for(let step=0; step<10; step++){
-    d=cur.toDataURL("image/jpeg",q);
-    if(jpegBytes(d)<=maxBytes || Math.max(cur.width,cur.height)<=1400) break;
-    if(q>0.8) q=Math.round((q-0.04)*100)/100;           // 0.92 → 0.88 → 0.84 → 0.80
-    else { const k=0.85; const nx=scaleCanvas(cur,k); if(cur!==cv) cur.width=0; cur=nx; q=0.88; }
+    if(jpegBytes(d)<=maxBytes || Math.max(uw,uh)<=1400) break;
+    if(q>0.8) q=Math.round((q-0.04)*100)/100;           // 0.90 → 0.86 → 0.82
+    else { const nx=scaleCanvas(cur,0.85); if(cur!==cv) cur.width=0; cur=nx; q=0.88; }
+    // 줄였으면 반드시 그 크기로 다시 만든다 — 적는 크기와 사진이 어긋나면 안 됨
+    d=cur.toDataURL("image/jpeg",q); uw=cur.width; uh=cur.height;
   }
-  return {d:d, w:cur.width, h:cur.height, cv:cur};
+  return {d:d, w:uw, h:uh, cv:cur};
 }
 function makeLotCopy(cv){
   const k=Math.min(1, 1400/Math.max(cv.width,cv.height));
@@ -976,6 +978,22 @@ function b64Bytes(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);fo
 function esc(s){return String(s).replace(/([()\\])/g,"\\$1");}
 function ascii(s){return String(s).replace(/[^\x20-\x7E]/g,"");}
 
+/* JPEG 안에 기록된 실제 가로·세로를 읽는다. PDF에 적는 숫자가 사진과 어긋나면
+   엄격한 뷰어에서 그림이 밀리거나 잘려 보이므로, 넘겨받은 값 대신 이걸 쓴다. */
+function jpegSize(bytes){
+  for(let i=2;i+9<bytes.length;){
+    if(bytes[i]!==0xFF){ i++; continue; }
+    const mk=bytes[i+1];
+    if(mk===0xD8||mk===0x01||(mk>=0xD0&&mk<=0xD7)){ i+=2; continue; }
+    const len=(bytes[i+2]<<8)|bytes[i+3];
+    if(mk>=0xC0&&mk<=0xCF&&mk!==0xC4&&mk!==0xC8&&mk!==0xCC){
+      return {h:(bytes[i+5]<<8)|bytes[i+6], w:(bytes[i+7]<<8)|bytes[i+8]};
+    }
+    if(len<2) break;
+    i+=2+len;
+  }
+  return null;
+}
 function buildPdfBase64(items, meta){
   const parts=[]; let len=0;
   const put=x=>{const u=(typeof x==="string")?lat(x):x; parts.push(u); len+=u.length;};
@@ -989,6 +1007,8 @@ function buildPdfBase64(items, meta){
 
   items.forEach((it,i)=>{
     const bytes=b64Bytes(it.d.split(",")[1]);
+    const real=jpegSize(bytes);
+    if(real && real.w && real.h){ it.w=real.w; it.h=real.h; }   // 사진이 말하는 크기를 우선
     so(imgId(i));
     put("<< /Type /XObject /Subtype /Image /Width "+it.w+" /Height "+it.h+
         " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+bytes.length+" >>\nstream\n");
@@ -1028,6 +1048,12 @@ function buildPdfBase64(items, meta){
   let bin=""; const CH=0x8000;
   for(let i=0;i<all.length;i+=CH) bin+=String.fromCharCode.apply(null, all.subarray(i,i+CH));
   return "data:application/pdf;base64,"+btoa(bin);
+}
+/* 전송 도중 데이터가 잘리거나 깨지면 서버가 알아채도록, 길이와 검사값을 같이 보낸다 */
+function pdfStamp(pdf){
+  const b64=pdf.slice(pdf.indexOf(",")+1);
+  let h=0; for(let i=0;i<b64.length;i++) h=(h*31+b64.charCodeAt(i))>>>0;
+  return {pdfLen:b64.length, pdfSum:h};
 }
 function pdfMeta(){
   const d=new Date();
@@ -1098,21 +1124,24 @@ async function doSave(){
     return;
   }
 
+  Object.assign(rec, pdfStamp(pdf));
   const send=[];
   if(wantJpg) send.push(ph);
   if(hasOrig) send.push({d:origData, w:0, h:0, orig:true});
-  await idbPut({uuid:rec.uuid, rec:rec, photos:send, pdf:pdf, ts:Date.now()});
+  const item={uuid:rec.uuid, rec:rec, photos:send, pdf:pdf, ts:Date.now()};
+  await idbPut(item);
 
   // 서버 답을 기다린다 — 성공/실패를 눈으로 확인하게
   busy(true,"드라이브에 올리는 중 ("+mb+"MB)");
   lastErr="";
+  let sentOk=false;
   uploadProgress=(a,b,merging,split,sending)=>{ $("busyTxt").textContent =
       sending ? "드라이브에 올리는 중 ("+mb+"MB)"
     : split   ? "다시 시도하는 중…"
     : merging ? "드라이브에서 합치는 중…"
               : "나눠 보내는 중 "+a+" / "+b; };
-  try{ await flushNow(); } finally { uploadProgress=null; }
-  const stillQueued=(await idbAll()).some(x=>x.uuid===rec.uuid);
+  try{ sentOk=await sendNow(item); } finally { uploadProgress=null; }
+  const stillQueued=!sentOk;
   busy(false);
 
   // 전송 성공이든 대기열 보관이든 촬영분은 확보됐으니 다음 장으로 넘어간다
@@ -1136,7 +1165,21 @@ async function doSave(){
       +"<br><span style='color:var(--muted)'>"+esc_(base)+".pdf · "+mb+"MB</span>", after);
   }
 }
-async function flushNow(){ while(flushing) await delay(200); quietFlush=true; try{ await flushOutbox(); } finally{ quietFlush=false; } }
+const inFlight=new Set();          // 지금 직접 보내는 중인 항목 (자동 재시도가 건드리지 않게)
+async function sendNow(item){
+  inFlight.add(item.uuid);
+  try{
+    const ok=await sendItem(item);
+    if(ok){ await idbDelete(item.uuid); lastErr=""; return true; }
+    return false;
+  }catch(e){
+    lastErr=describeSendError(e);
+    return false;
+  }finally{
+    inFlight.delete(item.uuid);
+    await updatePending();
+  }
+}
 function esc_(t){ return String(t).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
 /* 팝업 없이 알림 한 줄로만 알린다. 실패해도 작업 흐름을 막지 않음 */
 function showResult(ok,title,html,after){
@@ -1163,6 +1206,7 @@ function sendLotPdf(){
         lotQty:lotTotal, shotIdx:0, qtyInShot:0, doneQty:doneQty, kind:"lotPdf", sheets:lotPhotos.length,
         fileName:"", pdfName:name, worker:worker,
         uuid:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()) };
+      Object.assign(rec, pdfStamp(pdf));
       if(endpoint) idbPut({uuid:rec.uuid, rec:rec, photos:[], pdf:pdf, ts:Date.now()}).then(()=>{updatePending();flushOutbox();});
       recent.unshift(rec); renderRecentList();
       toast(lotPhotos.length+"장 통합 PDF 전송 대기");
@@ -1178,7 +1222,7 @@ $("menuPdf").onclick=()=>{ $("menuSheet").classList.remove("on"); sendLotPdf(); 
    차례로 보내고, 서버가 합쳐서 저장한다. 끊기면 받은 조각 다음부터 이어 보낸다. */
 const CHUNK_CHARS = 256*1024;      // 조각 하나 약 0.25MB (연결 테스트처럼 가벼움)
 let uploadProgress=null;           // 저장 버튼이 진행 상황을 화면에 보여줄 때 씀
-let formWorks=true;                // form 전송이 통하는 환경인지 (안 되면 바로 조각 전송)
+let transport="direct";            // direct → form → chunk 순으로 자동 전환, 통한 방법을 기억
 
 class SendError extends Error {}
 async function postForm(fd){
@@ -1228,15 +1272,36 @@ async function verifySaved(rec){
   return !!j.found;
 }
 async function sendItem(item){
-  // ① form 전송 후 도착 확인
-  if(formWorks && (!item.sent || !item.sent.length)){
+  if(!item.pdf) throw new SendError("보낼 PDF가 없는 항목입니다");
+  const fresh = !item.sent || !item.sent.length;
+
+  // ① 평범하게 한 번에 — 지금 크기(약 0.5MB)면 보통 몇 초면 끝난다
+  if(fresh && transport==="direct"){
     if(uploadProgress) uploadProgress(0,0,false,false,true);
-    formUpload(item).catch(()=>{});          // 응답을 못 읽으므로 기다리지 않고
-    for(let t=0;t<12;t++){                   // 서버에 직접 물어본다 (최대 약 40초)
-      await delay(t<2?1500:3500);
+    try{
+      const fd=new FormData();
+      fd.append("payload",JSON.stringify(item.rec));
+      if(item.pdf) fd.append("pdf",item.pdf);
+      (item.photos||[]).forEach((p,i)=>fd.append("photo"+(i+1), p.d));
+      const j=await postForm(fd);
+      if(j.ok||j.duplicated) return true;
+      if(/^DATA/.test(j.error||"")) transport="form";   // 오다가 잘렸다 → 다른 방법으로
+      else throw new SendError("스크립트 응답: "+(j.error||""));
+    }catch(e){
+      if(!(e instanceof SendError) || e.message!=="NET") throw e;
+      transport="form";                      // 이 환경에선 안 되는구나
+    }
+  }
+
+  // ② form 전송 후 도착 확인
+  if(fresh && transport==="form"){
+    if(uploadProgress) uploadProgress(0,0,false,false,true);
+    formUpload(item).catch(()=>{});
+    for(let t=0;t<8;t++){                    // 최대 약 8초만 기다린다
+      await delay(t===0?700:1000);
       try{ if(await verifySaved(item.rec)) return true; }catch(e){}
     }
-    formWorks=false;                       // 이 기기/브라우저에선 안 되는구나 → 다음부터 바로 조각 전송
+    transport="chunk";
     if(uploadProgress) uploadProgress(0,0,false,true);
   }
   // ② 끊기면 조각으로 나눠서 (카카오톡 브라우저·약한 신호 대비)
@@ -1265,7 +1330,7 @@ async function sendChunked(item){
   let j;
   try{ j=await postForm(fd); }catch(e){ if(e.message==="NET") e.message="NET:"+n+"/"+n; throw e; }
   if(j.ok||j.duplicated) return true;
-  if(j.missing==="all"){ item.sent=[]; await idbPut(item); }
+  if(j.missing==="all" || /^DATA/.test(j.error||"")){ item.sent=[]; await idbPut(item); }
   else if(Array.isArray(j.missing)){ item.sent=item.sent.filter(x=>j.missing.indexOf(x)<0); await idbPut(item); }
   throw new SendError("서버에서 합치기 실패: "+(j.error||""));
 }
@@ -1278,19 +1343,29 @@ function describeSendError(e){
   return m;
 }
 
-async function flushOutbox(){
+async function flushOutbox(firstUuid){
   if(!endpoint||flushing) return;
   flushing=true;
   let sentNow=0;
   try{
-    const all=await idbAll();
+    let all=await idbAll();
+    if(firstUuid) all=all.slice().sort((a,b)=>(a.uuid===firstUuid?-1:b.uuid===firstUuid?1:0));
+    let netFails=0;
     for(const item of all){
+      if(item.parked || inFlight.has(item.uuid)) continue;   // 포기했거나, 지금 직접 보내는 중
       try{
         await sendItem(item);
-        await idbDelete(item.uuid); sentNow++; lastErr="";
+        await idbDelete(item.uuid); sentNow++; lastErr=""; netFails=0;
       }catch(e){
         lastErr=describeSendError(e);
-        break;                                      // 다음 기회에 이어서
+        const isNet=String(e&&e.message||"").indexOf("NET")===0;
+        if(!isNet){                                   // 서버가 거부한 항목은 몇 번만 더
+          item.fails=(item.fails||0)+1;
+          if(item.fails>=3) item.parked=true;
+          try{ await idbPut(item); }catch(_){}
+        }
+        if(isNet && ++netFails>=2) break;             // 네트워크가 끊긴 상태면 그만
+        // 한 건이 막혀도 뒤에 찍은 장은 계속 보낸다
       }
     }
   } finally {
@@ -1349,7 +1424,8 @@ async function refreshClearBig(){
   const b=$("clearBig");
   if(all.length){
     b.style.display="block";
-    b.textContent="미전송 "+all.length+"건 모두 지우기";
+    const parked=all.filter(x=>x.parked).length;
+    b.textContent="미전송 "+all.length+"건 모두 지우기"+(parked?(" (실패 "+parked+"건 포함)"):"");
     b.dataset.n=all.length;
   } else b.style.display="none";
 }
