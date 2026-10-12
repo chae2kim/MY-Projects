@@ -10,21 +10,18 @@
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <!--
   ┌─ 전송 규약 (nameplate_scan) ─────────────────────────────────┐
-  │ 검정명판 Code.gs 에 handleScan_ 블록을 추가해서 씁니다.       │
-  │ 큐(IndexedDB)는 이미 분리되어 있습니다.                       │
+  │ LOT 하나당 PDF 한 개. 앱은 한 장씩 보내고 서버가 합친다.      │
   │                                                              │
   │ 필드                                                          │
-  │   payload : JSON — 아래 키                                    │
-  │   pdf     : 항상 전송 → p.pdfName                             │
-  │   photo1  : 저장 형식이 "PDF + JPG" 이상일 때 → p.fileName    │
-  │   photo2  : "+ 원본" 일 때 카메라 원본 → p.originalName       │
+  │   payload : JSON — action:"page", lotId, pageIdx, lotName …   │
+  │   page    : 이번 장 사진(JPEG data URL)                       │
+  │   (약하면 chunk/commit 으로 나눠 보냄 — 서버가 합쳐서 처리)   │
   │                                                              │
-  │ payload 키: tool, saveMode, model, form, cat, ym, lotQty,     │
-  │   shotIdx, qtyInShot, doneQty, pdfName, fileName,            │
-  │   originalName, hasOriginal, scanWidth, scanHeight,          │
-  │   filter, worker, uuid, kind("lotPdf"), sheets               │
+  │ 서버는 LOT별로 페이지를 모아두고 한 장 받을 때마다            │
+  │ 합본 PDF를 다시 만들어 덮어쓴다. 중간에 멈춰도 그때까지의     │
+  │ 페이지가 든 PDF가 남아 있다.                                  │
   │                                                              │
-  │ 응답에 scan:true 가 있어야 성공으로 봅니다(블록 없으면 실패). │
+  │ 응답에 scan:true 가 있어야 성공으로 본다.                     │
   └──────────────────────────────────────────────────────────────┘
 -->
 <style>
@@ -180,7 +177,7 @@
       <div class="fld">
         <label>LOT 수량 (명판 총 개수)</label>
         <input type="text" id="lotQty" inputmode="numeric" maxlength="5" placeholder="예: 50" autocomplete="off">
-        <div class="hint">한 장에 몇 개를 담을지는 촬영하면서 정합니다. 사진은 순서대로 −1, −2 … 로 저장됩니다.</div>
+        <div class="hint">한 장에 몇 개를 담을지는 촬영하면서 정합니다. 찍은 사진은 LOT마다 <b>PDF 한 개</b>에 페이지로 쌓입니다.</div>
         <div class="hint" id="qtyPreview" style="color:var(--blue);font-weight:700"></div>
       </div>
     </div>
@@ -226,7 +223,6 @@
     <button class="shootBtn" id="shootBtn">📷 촬영</button>
     <div class="subActions">
       <button id="retakeBtn">↻ 다시 찍기</button>
-      <button id="lotPdfBtn">📄 LOT 통합 PDF</button>
     </div>
   </div>
 </div>
@@ -254,7 +250,6 @@
 <div class="sheet" id="menuSheet">
   <div class="card2">
     <h3>메뉴 <button class="x" data-close="menuSheet">×</button></h3>
-    <div class="menuItem" id="menuPdf"><div class="mi">📄</div>이번 LOT 통합 PDF 전송</div>
     <div class="menuItem" id="menuSetting"><div class="mi">⚙</div>저장 연결 설정</div>
     <div class="menuItem" id="menuReset"><div class="mi">↺</div>작업 설정 변경(처음 화면)</div>
   </div>
@@ -280,6 +275,14 @@
     <h4>드라이브 연결이 없습니다</h4>
     <p>저장 주소가 비어 있어서 이대로 찍으면 <b>드라이브에 아무것도 저장되지 않습니다.</b> 설정에서 테스트용 Apps Script 주소를 넣고 연결 테스트를 해주세요.</p>
     <div class="cacts"><button id="noLinkGo">저장 없이 시험</button><button class="pri" id="noLinkOpen">설정 열기</button></div>
+  </div>
+</div>
+
+<div class="confirm" id="resumeBox">
+  <div class="box">
+    <h4>하던 작업이 있습니다</h4>
+    <p id="resumeMsg"></p>
+    <div class="cacts"><button id="resumeNew">새로 시작</button><button class="pri" id="resumeGo">이어서</button></div>
   </div>
 </div>
 
@@ -317,18 +320,29 @@ const MODELS=[
 ].map(m=>({form:m[0],cat:m[1],name:m[2],prefix:m[3]}));
 const CATS=[...new Set(MODELS.map(m=>m.cat))];
 
-const APP_VER = "v17 (2026-10-07)";
+const APP_VER = "v18 (2026-10-12)";
 const $=id=>document.getElementById(id);
 let sel=null, activeCat=null;
 const fastMode=false;          // 영역 보정: 매번 확인
 let lotTotal=0, doneQty=0, shotIdx=1, qty=1;   // 총 개수 · 담은 개수 · 몇 번째 장 · 이번 장 개수
 let photos=[];            // 이번 장 (1개)
-let lotPhotos=[];         // 이번 LOT 전체 (통합 PDF용)
+let lotId="";             // 이 LOT을 구분하는 번호 (서버가 페이지를 모을 때 씀)
+/* 작업 중이던 LOT을 기억해 두었다가, 앱을 닫았다 열면 그 LOT에 이어서 붙인다 */
+function saveLotState(){
+  try{ localStorage.setItem("np_lot", JSON.stringify({
+    lotId:lotId, model:sel?sel.name:"", ym:$("ym").value,
+    total:lotTotal, done:doneQty, idx:shotIdx, ts:Date.now()})); }catch(e){}
+}
+function loadLotState(){
+  try{ const v=JSON.parse(localStorage.getItem("np_lot")||"null");
+    if(v && v.lotId && Date.now()-v.ts < 14*86400000) return v; }catch(e){}
+  return null;
+}
 const DEFAULT_ENDPOINT="https://script.google.com/macros/s/AKfycbzqGzm2uMc2CNwzt2sYfc9a4MypPyN9t_Wwe1RAbmyykA5GpLVE1BTF1ZOk2usu6Zie6A/exec"; // 스캔 전용 백엔드
 let endpoint=DEFAULT_ENDPOINT;
 let worker="";
 let pendingCount=0, recent=[];
-let usedNames=new Set();   // 이번 작업에서 이미 쓴 파일명
+
 let lastErr="", lastFailToast=0;
 let flushing=false;       // 전송 중 여부 (시작 직후 호출되므로 위에서 선언)
 let quietFlush=false;     // 저장 버튼이 직접 기다리는 전송이면 토스트 생략
@@ -385,31 +399,42 @@ function renderDD(){
 function digits(v){return (String(v).match(/\d/g)||[]).join("");}
 function ymTag(){return ($("ym").value||"").replace("-","");}
 function baseName(){return sel?sel.name:"NA";}
-/* 파일명: 기종명 (수량). 같은 수량이 또 나오면 -2, -3 을 붙여 덮어쓰기를 막는다 */
-function uniqueBase(b){
-  if(!usedNames.has(b)) return b;
-  let i=2; while(usedNames.has(b+"-"+i)) i++;
-  return b+"-"+i;
-}
-function fileBase(){return uniqueBase(baseName()+" ("+qty+"EA)");}
-function fnameJpg(){return fileBase()+".jpg";}
-function pdfName(){return fileBase()+".pdf";}
+/* LOT 하나당 PDF 한 개. 이름은 기종명 (LOT 전체 수량EA) */
+function lotFileName(){ return baseName()+" ("+lotTotal+"EA).pdf"; }
 function remain(){return Math.max(0, lotTotal-doneQty);}
 
 function refreshStart(){
   const q=parseInt(digits($("lotQty").value)||"0",10);
   const ok=!!sel && q>0 && !!$("ym").value;
-  $("qtyPreview").textContent = ok ? ("파일명 예: "+sel.name+" (10EA).jpg · 총 "+q+"개") : "";
+  $("qtyPreview").textContent = ok ? (sel.name+" ("+q+"EA).pdf 한 개로 저장됩니다") : "";
   $("startBtn").disabled=!ok;
 }
 $("startBtn").onclick=()=>{
   if($("startBtn").disabled) return;
   if(!endpoint){ $("noLinkBox").classList.add("on"); return; }
+  const prev=loadLotState();
+  const q=parseInt(digits($("lotQty").value),10);
+  if(prev && prev.lotId && prev.done<prev.total && prev.model===sel.name
+     && prev.ym===$("ym").value && prev.total===q){
+    $("resumeMsg").textContent=prev.model+" · "+prev.total+"개 중 "+prev.done
+      +"개까지 찍었습니다. 이어서 하면 같은 PDF에 계속 붙고, 새로 시작하면 PDF가 따로 만들어집니다.";
+    $("resumeBox").classList.add("on"); return;
+  }
   beginLot();
 };
+$("resumeGo").onclick=()=>{
+  $("resumeBox").classList.remove("on");
+  const prev=loadLotState();
+  lotTotal=prev.total; doneQty=prev.done; shotIdx=prev.idx;
+  lotId=prev.lotId; qty=Math.min(10, Math.max(1, lotTotal-doneQty));
+  goCapture();
+};
+$("resumeNew").onclick=()=>{ $("resumeBox").classList.remove("on"); beginLot(); };
 function beginLot(){
   lotTotal=parseInt(digits($("lotQty").value),10);
-  doneQty=0; shotIdx=1; qty=Math.min(10,lotTotal); lotPhotos=[]; usedNames=new Set();
+  doneQty=0; shotIdx=1; qty=Math.min(10,lotTotal);
+  lotId="L"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+  saveLotState();
   goCapture();
 }
 
@@ -433,7 +458,7 @@ function refreshCap(){
   $("pbarFill").style.width=(lotTotal?Math.round(doneQty/lotTotal*100):0)+"%";
   if(qty>remain()) qty=Math.max(1,remain());
   $("qtyVal").textContent=remain()>0?qty:0;
-  $("fileTag").textContent=remain()>0?fnameJpg():"LOT 완료";
+  $("fileTag").textContent=remain()>0?(lotFileName()+" · "+shotIdx+"페이지째"):"LOT 완료";
   $("qMinus").disabled=(qty<=1||remain()===0);
   $("qPlus").disabled=(qty>=remain());
   document.querySelectorAll(".qquick button").forEach(b=>{
@@ -442,7 +467,6 @@ function refreshCap(){
     b.disabled = remain()===0 || (b.dataset.q!=="all" && v>remain());
   });
   refreshLinkBadge();
-  $("lotPdfBtn").disabled=!lotPhotos.length;
   updateMainBtn();
 }
 
@@ -805,13 +829,6 @@ function encodeForUpload(cv,maxBytes){
   }
   return {d:d, w:uw, h:uh, cv:cur};
 }
-function makeLotCopy(cv){
-  const k=Math.min(1, 1400/Math.max(cv.width,cv.height));
-  const c=k<1?scaleCanvas(cv,k):cv;
-  const d=c.toDataURL("image/jpeg",0.8);
-  const r={d:d,w:c.width,h:c.height}; if(c!==cv) c.width=0;
-  return r;
-}
 function runScan(q){
   busy(true,"보정하는 중");
   setTimeout(()=>{
@@ -822,12 +839,11 @@ function runScan(q){
         const out=warp($("src"), q, caps[i]);
         applyScanFilter(out, filterMode);
         const enc=encodeForUpload(out, UPLOAD_MAX_BYTES);
-        const lotD=makeLotCopy(enc.cv);           // 통합 PDF용 가벼운 사본
         const d=enc.d;
         lastQuad=quadToRatio(q);
         try{localStorage.setItem("np_quad",JSON.stringify(lastQuad));}catch(e){}
         show("scCap");
-        photos=[{d:d,w:enc.w,h:enc.h,lotD:lotD.d,lotW:lotD.w,lotH:lotD.h}];
+        photos=[{d:d,w:enc.w,h:enc.h}];
         showFreeze(d); capState="shotDone"; refreshCap();
         if(i>0) toast("기기 여유가 부족해 "+enc.w+"px로 저장합니다");
         else toast("아래 초록 버튼을 눌러야 드라이브에 저장됩니다");
@@ -972,93 +988,11 @@ function unsharp(cv,a){
   ctx.putImageData(im,0,0);
 }
 
-/* ─────────── PDF (외부 라이브러리 없음) ─────────── */
-function lat(s){const u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i)&255;return u;}
-function b64Bytes(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
-function esc(s){return String(s).replace(/([()\\])/g,"\\$1");}
-function ascii(s){return String(s).replace(/[^\x20-\x7E]/g,"");}
-
-/* JPEG 안에 기록된 실제 가로·세로를 읽는다. PDF에 적는 숫자가 사진과 어긋나면
-   엄격한 뷰어에서 그림이 밀리거나 잘려 보이므로, 넘겨받은 값 대신 이걸 쓴다. */
-function jpegSize(bytes){
-  for(let i=2;i+9<bytes.length;){
-    if(bytes[i]!==0xFF){ i++; continue; }
-    const mk=bytes[i+1];
-    if(mk===0xD8||mk===0x01||(mk>=0xD0&&mk<=0xD7)){ i+=2; continue; }
-    const len=(bytes[i+2]<<8)|bytes[i+3];
-    if(mk>=0xC0&&mk<=0xCF&&mk!==0xC4&&mk!==0xC8&&mk!==0xCC){
-      return {h:(bytes[i+5]<<8)|bytes[i+6], w:(bytes[i+7]<<8)|bytes[i+8]};
-    }
-    if(len<2) break;
-    i+=2+len;
-  }
-  return null;
-}
-function buildPdfBase64(items, meta){
-  const parts=[]; let len=0;
-  const put=x=>{const u=(typeof x==="string")?lat(x):x; parts.push(u); len+=u.length;};
-  const off={}, n=items.length;
-  const imgId=i=>4+2*i, cntId=i=>5+2*i, pgId=i=>4+2*n+i;
-  const so=id=>{off[id]=len; put(id+" 0 obj\n");}, eo=()=>put("\nendobj\n");
-  put("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
-  so(1); put("<< /Type /Catalog /Pages 2 0 R >>"); eo();
-  so(2); put("<< /Type /Pages /Count "+n+" /Kids ["+items.map((_,i)=>pgId(i)+" 0 R").join(" ")+"] >>"); eo();
-  so(3); put("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"); eo();
-
-  items.forEach((it,i)=>{
-    const bytes=b64Bytes(it.d.split(",")[1]);
-    const real=jpegSize(bytes);
-    if(real && real.w && real.h){ it.w=real.w; it.h=real.h; }   // 사진이 말하는 크기를 우선
-    so(imgId(i));
-    put("<< /Type /XObject /Subtype /Image /Width "+it.w+" /Height "+it.h+
-        " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+bytes.length+" >>\nstream\n");
-    put(bytes); put("\nendstream"); eo();
-
-    const lines=[
-      "MODEL   "+ascii(meta.model)+"        TYPE  "+ascii(meta.form),
-      "YYYY-MM  "+ascii(meta.ym)+"        SCAN DATE  "+ascii(meta.dateStr)+(meta.worker?("     BY  "+ascii(meta.worker)):""),
-      "SHEET   "+(it.idx||(i+1))+(n>1?(" of "+n):"")+"          NAMEPLATES  "+(it.qty||"-")+
-        (meta.lotTotal?("   (LOT "+meta.lotTotal+")"):"")
-    ];
-    const top=806, lh=14, headBottom=top-lh*(lines.length-1)-16;
-    const availH=headBottom-40, availW=523;
-    const sc=Math.min(availW/it.w, availH/it.h);
-    const iw=it.w*sc, ih=it.h*sc;
-    const ix=(595-iw)/2, iy=Math.max(40, headBottom-6-ih);
-    let cs="BT /F1 9.5 Tf 36 "+top+" Td "+lh+" TL\n";
-    lines.forEach((L,k)=>{ cs+=(k?"T* ":"")+"("+esc(L)+") Tj\n"; });
-    cs+="ET\n0.85 0.88 0.93 RG 0.7 w 36 "+(headBottom+6).toFixed(1)+" m 559 "+(headBottom+6).toFixed(1)+" l S\n";
-    cs+="q "+iw.toFixed(2)+" 0 0 "+ih.toFixed(2)+" "+ix.toFixed(2)+" "+iy.toFixed(2)+" cm /Im0 Do Q\n";
-    so(cntId(i)); put("<< /Length "+cs.length+" >>\nstream\n"+cs+"\nendstream"); eo();
-
-    so(pgId(i));
-    put("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> "+
-        "/XObject << /Im0 "+imgId(i)+" 0 R >> >> /Contents "+cntId(i)+" 0 R >>");
-    eo();
-  });
-
-  const total=3*n+3, xref=len;
-  let x="xref\n0 "+(total+1)+"\n0000000000 65535 f \n";
-  for(let id=1;id<=total;id++) x+=String(off[id]||0).padStart(10,"0")+" 00000 n \n";
-  x+="trailer\n<< /Size "+(total+1)+" /Root 1 0 R >>\nstartxref\n"+xref+"\n%%EOF";
-  put(x);
-
-  const all=new Uint8Array(len); let o=0;
-  parts.forEach(p=>{all.set(p,o);o+=p.length;});
-  let bin=""; const CH=0x8000;
-  for(let i=0;i<all.length;i+=CH) bin+=String.fromCharCode.apply(null, all.subarray(i,i+CH));
-  return "data:application/pdf;base64,"+btoa(bin);
-}
 /* 전송 도중 데이터가 잘리거나 깨지면 서버가 알아채도록, 길이와 검사값을 같이 보낸다 */
-function pdfStamp(pdf){
+function dataStamp(pdf){
   const b64=pdf.slice(pdf.indexOf(",")+1);
   let h=0; for(let i=0;i<b64.length;i++) h=(h*31+b64.charCodeAt(i))>>>0;
   return {pdfLen:b64.length, pdfSum:h};
-}
-function pdfMeta(){
-  const d=new Date();
-  return { model:sel?sel.name:"", form:sel?sel.form:"", ym:$("ym").value, lotTotal:lotTotal, worker:worker,
-    dateStr:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0") };
 }
 
 /* ─────────── 저장 / 전송 ─────────── */
@@ -1095,25 +1029,20 @@ async function doSave(){
 
   const ph=photos[0];
   ph.idx=shotIdx; ph.qty=qty;
-  const wantJpg=(saveMode!=="pdf");
-  const hasOrig=(saveMode==="all") && !!origData;
-  const base=fileBase();            // 이 장의 파일명 확정
-  const rec={ ts:new Date().toISOString(), tool:"nameplate_scan", saveMode:saveMode,
+  const d=new Date();
+  const rec={ ts:d.toISOString(), tool:"nameplate_scan", action:"page",
     form:sel.form, cat:sel.cat, model:sel.name, ym:$("ym").value,
-    lotQty:lotTotal, shotIdx:shotIdx, qtyInShot:qty, doneQty:doneQty+qty,
-    pdfName:base+".pdf",
-    fileName:wantJpg?(base+".jpg"):"", originalName:hasOrig?(base+"_orig.jpg"):"",
-    hasOriginal:hasOrig, scanWidth:ph.w, scanHeight:ph.h,
+    lotId:lotId, lotName:lotFileName(), lotQty:lotTotal,
+    pageIdx:shotIdx, shotIdx:shotIdx, qtyInShot:qty, doneQty:doneQty+qty,
+    dateStr:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"),
+    scanWidth:ph.w, scanHeight:ph.h,
     filter:filterMode, scan:true, worker:worker,
     uuid:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()) };
 
-  // PDF를 못 만들면 여기서 멈춘다 (예전엔 빈 채로 보내서 조용히 실패했음)
-  let pdf="", pdfErr="";
-  try{ pdf=buildPdfBase64([ph], pdfMeta()); }catch(e){ pdfErr=String(e); }
+  const pdf=ph.d;                      // 이번 장 사진 (서버가 합본에 한 페이지로 더한다)
   if(!pdf || pdf.length<200){
     busy(false);
-    showResult(false,"PDF를 만들지 못했습니다",
-      "사진이 너무 크거나 폰 메모리가 부족했습니다. 다시 찍어주세요.<br><span style='color:var(--muted)'>"+esc_(pdfErr)+"</span>");
+    showResult(false,"사진을 만들지 못했습니다","다시 찍어주세요.");
     return;
   }
   const mb=(pdf.length*0.75/1048576).toFixed(1);
@@ -1124,11 +1053,8 @@ async function doSave(){
     return;
   }
 
-  Object.assign(rec, pdfStamp(pdf));
-  const send=[];
-  if(wantJpg) send.push(ph);
-  if(hasOrig) send.push({d:origData, w:0, h:0, orig:true});
-  const item={uuid:rec.uuid, rec:rec, photos:send, pdf:pdf, ts:Date.now()};
+  Object.assign(rec, dataStamp(pdf));
+  const item={uuid:rec.uuid, rec:rec, photos:[], pdf:pdf, kind:"page", ts:Date.now()};
   await idbPut(item);
 
   // 서버 답을 기다린다 — 성공/실패를 눈으로 확인하게
@@ -1145,24 +1071,23 @@ async function doSave(){
   busy(false);
 
   // 전송 성공이든 대기열 보관이든 촬영분은 확보됐으니 다음 장으로 넘어간다
-  usedNames.add(base);
-  lotPhotos.push({d:ph.lotD||ph.d,w:ph.lotW||ph.w,h:ph.lotH||ph.h,idx:ph.idx,qty:ph.qty}); if(lotPhotos.length>60) lotPhotos.shift();
   recent.unshift(rec); if(recent.length>40) recent.pop();
-  doneQty+=qty; shotIdx++;
+  doneQty+=qty; shotIdx++; saveLotState();
   photos=[]; origData=null; capState="live"; showLive(); renderRecentList();
   if(remain()>0) qty=Math.min(qty, remain());
   refreshCap();
 
-  const where="검정명판 › "+sel.name+" › "+(rec.ym||"").slice(0,7);
+  const pageNo=rec.pageIdx;
   const after = remain()<=0 ? "LOT_DONE" : "";
   if(!stillQueued){
-    showResult(true,"드라이브 저장 완료",
-      "<b>"+esc_(base)+".pdf</b><br>"+esc_(where)+"<br><span style='color:var(--muted)'>"+mb+"MB · 남은 "+remain()+"개</span>", after);
+    showResult(true,"저장 완료 · "+pageNo+"페이지",
+      "<b>"+esc_(rec.lotName)+"</b><br>"+pageNo+"페이지짜리로 저장됐습니다"
+      +"<br><span style='color:var(--muted)'>남은 "+remain()+"개</span>", after);
   }else{
     const why=lastErr||"서버 응답이 없습니다";
     showResult(false,"아직 드라이브에 안 올라갔습니다",
-      esc_(why)+"<br><br>찍은 사진은 폰에 보관되어 있고, 받은 조각 다음부터 자동으로 이어서 보냅니다. <b>앱을 닫지 마세요.</b>"
-      +"<br><span style='color:var(--muted)'>"+esc_(base)+".pdf · "+mb+"MB</span>", after);
+      esc_(why)+"<br><br>찍은 사진은 폰에 보관되어 있고, 연결되면 자동으로 이어서 보냅니다. <b>앱을 닫지 마세요.</b>"
+      +"<br><span style='color:var(--muted)'>"+esc_(rec.lotName)+" "+pageNo+"페이지 · "+mb+"MB</span>", after);
   }
 }
 const inFlight=new Set();          // 지금 직접 보내는 중인 항목 (자동 재시도가 건드리지 않게)
@@ -1188,39 +1113,18 @@ function showResult(ok,title,html,after){
   else { if(!lastErr) lastErr=plain; toast("아직 전송 중 — 계속 찍으셔도 됩니다"); }
   if(after==="LOT_DONE"){
     stopCamera();
-    $("lotDoneMsg").textContent=sel.name+" · "+lotTotal+"개를 사진 "+(shotIdx-1)+"장에 모두 담았습니다.";
+    $("lotDoneMsg").textContent=sel.name+" · "+lotTotal+"개를 "+(shotIdx-1)+"페이지짜리 PDF 한 개로 담았습니다. ("+lotFileName()+")";
     $("lotDoneBox").classList.add("on");
   }else if(remain()>0){ startCamera(); }
 }
 $("retakeBtn").onclick=()=>{ photos=[]; capState="live"; showLive(); refreshCap(); startCamera(); };
 
-function sendLotPdf(){
-  if(!lotPhotos.length){ toast("아직 촬영한 장이 없습니다", true); return; }
-  busy(true,"통합 PDF 만드는 중");
-  setTimeout(()=>{
-    try{
-      const pdf=buildPdfBase64(lotPhotos, pdfMeta());
-      const name=baseName()+" (LOT "+lotTotal+"EA).pdf";
-      const rec={ ts:new Date().toISOString(), tool:"nameplate_scan", saveMode:saveMode,
-        form:sel.form, cat:sel.cat, model:sel.name, ym:$("ym").value,
-        lotQty:lotTotal, shotIdx:0, qtyInShot:0, doneQty:doneQty, kind:"lotPdf", sheets:lotPhotos.length,
-        fileName:"", pdfName:name, worker:worker,
-        uuid:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()) };
-      Object.assign(rec, pdfStamp(pdf));
-      if(endpoint) idbPut({uuid:rec.uuid, rec:rec, photos:[], pdf:pdf, ts:Date.now()}).then(()=>{updatePending();flushOutbox();});
-      recent.unshift(rec); renderRecentList();
-      toast(lotPhotos.length+"장 통합 PDF 전송 대기");
-    }catch(e){ toast("통합 PDF를 만들지 못했습니다", true); }
-    busy(false);
-  },40);
-}
-$("lotPdfBtn").onclick=sendLotPdf;
-$("menuPdf").onclick=()=>{ $("menuSheet").classList.remove("on"); sendLotPdf(); };
 
 /* ─────────── 조각 전송 ───────────
    PDF를 한 번에 보내면 카카오톡 브라우저·LTE에서 끊긴다. 작은 조각으로 나눠
    차례로 보내고, 서버가 합쳐서 저장한다. 끊기면 받은 조각 다음부터 이어 보낸다. */
-const CHUNK_CHARS = 256*1024;      // 조각 하나 약 0.25MB (연결 테스트처럼 가벼움)
+let chunkChars = 256*1024;         // 조각 하나 약 0.25MB. 막히면 반씩 줄인다
+const CHUNK_MIN = 8*1024;
 let uploadProgress=null;           // 저장 버튼이 진행 상황을 화면에 보여줄 때 씀
 let transport="direct";            // direct → form → chunk 순으로 자동 전환, 통한 방법을 기억
 
@@ -1251,7 +1155,7 @@ function formUpload(item){
     f.enctype="multipart/form-data"; f.acceptCharset="utf-8"; f.style.display="none";
     const add=(n,v)=>{ const t=document.createElement("textarea"); t.name=n; t.value=v; f.appendChild(t); };
     add("payload", JSON.stringify(item.rec));
-    if(item.pdf) add("pdf", item.pdf);
+    if(item.pdf) add(item.kind==="page"?"page":"pdf", item.pdf);
     (item.photos||[]).forEach((p,i)=>add("photo"+(i+1), p.d));
     let done=false;
     const finish=(fn,arg)=>{ if(done)return; done=true;
@@ -1267,7 +1171,8 @@ function formUpload(item){
 async function verifySaved(rec){
   const fd=new FormData();
   fd.append("payload",JSON.stringify({tool:"nameplate_scan",action:"check",
-    uuid:rec.uuid, model:rec.model, ym:rec.ym, pdfName:rec.pdfName}));
+    uuid:rec.uuid, model:rec.model, ym:rec.ym, pdfName:rec.pdfName,
+    lotId:rec.lotId, pageIdx:rec.pageIdx}));
   const j=await postForm(fd);
   return !!j.found;
 }
@@ -1281,7 +1186,7 @@ async function sendItem(item){
     try{
       const fd=new FormData();
       fd.append("payload",JSON.stringify(item.rec));
-      if(item.pdf) fd.append("pdf",item.pdf);
+      if(item.pdf) fd.append(item.kind==="page"?"page":"pdf", item.pdf);
       (item.photos||[]).forEach((p,i)=>fd.append("photo"+(i+1), p.d));
       const j=await postForm(fd);
       if(j.ok||j.duplicated) return true;
@@ -1310,23 +1215,34 @@ async function sendItem(item){
 async function sendChunked(item){
   const pdf=item.pdf||"";
   const b64=pdf.slice(pdf.indexOf(",")+1);
-  const n=Math.max(1, Math.ceil(b64.length/CHUNK_CHARS));
+  if(item.csize && item.csize!==chunkChars){ item.sent=[]; }   // 조각 크기가 바뀌면 처음부터
+  item.csize=chunkChars;
+  const n=Math.max(1, Math.ceil(b64.length/chunkChars));
   item.sent=item.sent||[];
   for(let k=0;k<n;k++){
     if(item.sent.indexOf(k)>=0) continue;
     if(uploadProgress) uploadProgress(k+1,n);
     const fd=new FormData();
-    fd.append("payload",JSON.stringify({tool:"nameplate_scan",action:"chunk",uuid:item.rec.uuid,idx:k,total:n}));
-    fd.append("part", b64.slice(k*CHUNK_CHARS,(k+1)*CHUNK_CHARS));
+    fd.append("payload",JSON.stringify({tool:"nameplate_scan",action:"chunk",
+      uuid:item.rec.uuid, idx:k, total:n, csize:chunkChars}));
+    fd.append("part", b64.slice(k*chunkChars,(k+1)*chunkChars));
     let j;
     try{ j=await postForm(fd); }
-    catch(e){ if(e.message==="NET") e.message="NET:"+item.sent.length+"/"+n; throw e; }
+    catch(e){
+      if(e.message==="NET" && chunkChars>CHUNK_MIN){      // 이 조각도 크다 → 반으로 줄여 다시
+        chunkChars=Math.max(CHUNK_MIN, Math.floor(chunkChars/2));
+        item.sent=[]; item.csize=chunkChars; await idbPut(item);
+        return await sendChunked(item);
+      }
+      if(e.message==="NET") e.message="NET:"+item.sent.length+"/"+n;
+      throw e;
+    }
     if(!j.ok) throw new SendError("조각 저장 실패: "+(j.error||""));
     item.sent.push(k); await idbPut(item);          // 여기까지 받은 건 기억 → 끊겨도 이어서
   }
   if(uploadProgress) uploadProgress(n,n,true);
   const fd=new FormData();
-  fd.append("payload",JSON.stringify(Object.assign({},item.rec,{action:"commit",total:n})));
+  fd.append("payload",JSON.stringify(Object.assign({},item.rec,{action:"commit",total:n,csize:chunkChars})));
   let j;
   try{ j=await postForm(fd); }catch(e){ if(e.message==="NET") e.message="NET:"+n+"/"+n; throw e; }
   if(j.ok||j.duplicated) return true;
